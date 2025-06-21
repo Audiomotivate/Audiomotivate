@@ -148,9 +148,7 @@ export class PostgresStorage implements IStorage {
       id: Date.now(),
       cartId: insertItem.cartId,
       productId: insertItem.productId,
-      quantity: insertItem.quantity || 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      quantity: insertItem.quantity || 1
     };
     
     items.push(newItem);
