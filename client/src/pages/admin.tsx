@@ -19,7 +19,7 @@ export default function AdminPanel() {
   });
 
   const { data: products = [], isLoading, refetch } = useQuery({
-    queryKey: ['/api/products'],
+    queryKey: ['/api/admin/products'],
     staleTime: 0,
     retry: 1
   });
@@ -30,10 +30,10 @@ export default function AdminPanel() {
         ...data,
         price: Math.round(parseFloat(data.price) * 100)
       };
-      return apiRequest('POST', '/api/products', productData);
+      return apiRequest('POST', '/api/admin/products', productData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+     queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
       setForm({
         title: '',
         description: '',
