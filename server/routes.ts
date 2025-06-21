@@ -440,21 +440,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register mock analytics route for development
   registerMockAnalyticsRoute(app);
 
-  // Serve admin panel (only in production)
-  if (process.env.NODE_ENV === "production") {
-    app.get("/admin", (req: Request, res: Response) => {
+    // Serve admin panel in production
+  app.get("/admin", (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === "production") {
       const distPath = path.join(process.cwd(), "dist", "public");
       const indexPath = path.join(distPath, "index.html");
       res.sendFile(indexPath);
-    });
+    } else {
+      res.redirect("http://localhost:5173/admin");
+    }
+  });
 
-    app.get("/admin/*", (req: Request, res: Response) => {
+  app.get("/admin/*", (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === "production") {
       const distPath = path.join(process.cwd(), "dist", "public");
       const indexPath = path.join(distPath, "index.html");
       res.sendFile(indexPath);
-    });
-  }
-
+    } else {
+      res.redirect("http://localhost:5173" + req.originalUrl);
+    }
+  });
   const httpServer = createServer(app);
   return httpServer;
 }
