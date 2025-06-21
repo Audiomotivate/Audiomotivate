@@ -228,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: "Invalid cart item ID" });
     }
     
-    const removed = await storage.removeCartItem(id);
+    const removed = await storage.removeCartItem(0, id);
     
     if (!removed) {
       return res.status(404).json({ message: "Cart item not found" });
@@ -271,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const item of cartItems) {
         console.log("Removing item:", item.id);
-        await storage.removeCartItem(item.id);
+        await storage.removeCartItem(0, item.id);
       }
       
       console.log("Cart cleared successfully");
@@ -343,7 +343,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment succeeded: ${paymentIntent.id}`);
-        // Here you can add logic to fulfill the order, send email receipts, etc.
         break;
       case 'payment_intent.payment_failed':
         const failedPayment = event.data.object as Stripe.PaymentIntent;
