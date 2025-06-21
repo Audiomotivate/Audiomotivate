@@ -5,12 +5,12 @@ const sql = neon(process.env.DATABASE_URL);
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      const products = await sql`SELECT * FROM products WHERE "isActive" = true ORDER BY id DESC`;
+      SELECT * FROM products WHERE is_active = true ORDER BY id DESC
       res.json(products);
     } else if (req.method === 'POST') {
       const { title, description, type, category, price, imageUrl, downloadUrl, duration } = req.body;
       const [product] = await sql`
-        INSERT INTO products (title, description, type, category, price, "imageUrl", "downloadUrl", duration, "isActive")
+        INSERT INTO products (title, description, type, category, price, "imageUrl", "downloadUrl", duration, is_active)
         VALUES (${title}, ${description}, ${type}, ${category}, ${price}, ${imageUrl}, ${downloadUrl}, ${duration || '45:30'}, true)
         RETURNING *
       `;
