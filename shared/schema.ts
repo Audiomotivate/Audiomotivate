@@ -98,7 +98,18 @@ export const dailyStats = pgTable("daily_stats", {
   salesCount: integer("sales_count").notNull().default(0),
   avgSessionDuration: integer("avg_session_duration").default(0), // In seconds
   bounceRate: integer("bounce_rate").default(0), // Percentage * 100
-  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const adminSettings = pgTable("admin_settings", {
+  id: serial("id").primaryKey(),
+  siteName: text("site_name").notNull().default("Audio Motívate"),
+  siteDescription: text("site_description").notNull().default("Plataforma de contenido motivacional digital"),
+  enableRegistration: boolean("enable_registration").notNull().default(true),
+  maintenanceMode: boolean("maintenance_mode").notNull().default(false),
+  analyticsEnabled: boolean("analytics_enabled").notNull().default(true),
+  emailNotifications: boolean("email_notifications").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
 });
 
 // Insert schemas
@@ -126,6 +137,7 @@ export type User = typeof users.$inferSelect;
 
 export type InsertPageView = typeof pageViews.$inferInsert;
 export type PageView = typeof pageViews.$inferSelect;
+export type AdminSettings = typeof adminSettings.$inferSelect;
 
 export type InsertSession = typeof sessions.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
