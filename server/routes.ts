@@ -6,9 +6,7 @@ import { insertCartItemSchema } from "@shared/schema";
 import crypto from "crypto";
 import path from "path";
 import Stripe from "stripe";
-import { registerAdminRoutes } from "./admin";
-import { registerAnalyticsRoutes } from "./analytics";
-import { registerMockAnalyticsRoute } from "./mock-analytics";
+// Simplified server without complex admin dependencies
 import fs from "fs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -36,6 +34,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       apiVersion: "2023-10-16" as any,
     });
   }
+
   // Lightweight admin routes
   app.get("/api/admin/products", (req, res) => {
     // Use regular products endpoint for admin
@@ -46,6 +45,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Use regular products endpoint for admin  
     res.redirect(307, '/api/products');
   });
+
+  // Create router for API routes
+  const router = express.Router();
+  app.use("/api", router);
+  
   // Get all products
   router.get("/products", async (req: Request, res: Response) => {
     const products = await storage.getAllProducts();
@@ -225,26 +229,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Remove item from cart
   router.delete("/cart/items/:id", async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const itemId = parseInt(req.params.id);
+    if (isNaN(itemId)) {
       return res.status(400).json({ message: "Invalid cart item ID" });
     }
     
-    const removed = await storage.removeCartItem(0, id);
-    
-    if (!removed) {
-      return res.status(404).json({ message: "Cart item not found" });
+    try {
+      const sessionId = req.cookies.cartSession;
+      const cart = await storage.getCart(sessionId);
+      
+      if (!cart) {
+        return res.status(404).json({ message: "Cart not found" });
+      }
+      
+      // Get current cart items to find the productId for this itemId
+      const cartItems = await storage.getCartItems(cart.id);
+      const itemToRemove = cartItems.find(item => item.id === itemId);
+      
+      if (!itemToRemove) {
+        return res.status(404).json({ message: "Cart item not found" });
+      }
+      
+      const removed = await storage.removeCartItem(cart.id, itemToRemove.productId);
+      
+      if (!removed) {
+        return res.status(404).json({ message: "Failed to remove cart item" });
+      }
+      
+      // Get updated cart items
+      const updatedCartItems = await storage.getCartItemsWithProducts(cart.id);
+      
+      res.json({
+        cart,
+        items: updatedCartItems
+      });
+    } catch (error) {
+      console.error("Error removing cart item:", error);
+      res.status(500).json({ message: "Failed to remove cart item" });
     }
-    
-    // Get updated cart
-    const sessionId = req.cookies.cartSession;
-    const cart = await storage.getCart(sessionId);
-    const cartItems = await storage.getCartItemsWithProducts(cart!.id);
-    
-    res.json({
-      cart,
-      items: cartItems
-    });
   });
 
   // Clear all items from cart
@@ -273,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const item of cartItems) {
         console.log("Removing item:", item.id);
-        await storage.removeCartItem(0, item.id);
+        await storage.removeCartItem(cart.id, item.productId);
       }
       
       console.log("Cart cleared successfully");
@@ -345,6 +367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`Payment succeeded: ${paymentIntent.id}`);
+        // Here you can add logic to fulfill the order, send email receipts, etc.
         break;
       case 'payment_intent.payment_failed':
         const failedPayment = event.data.object as Stripe.PaymentIntent;
@@ -436,32 +459,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Register analytics routes
-  registerAnalyticsRoutes(app);
-  
-  // Register mock analytics route for development
-  registerMockAnalyticsRoute(app);
+  // Analytics routes removed for Vercel compatibility
 
-    // Serve admin panel in production
-  app.get("/admin", (req: Request, res: Response) => {
-    if (process.env.NODE_ENV === "production") {
-      const distPath = path.join(process.cwd(), "dist", "public");
-      const indexPath = path.join(distPath, "index.html");
-      res.sendFile(indexPath);
-    } else {
-      res.redirect("http://localhost:5173/admin");
-    }
-  });
-
-  app.get("/admin/*", (req: Request, res: Response) => {
-    if (process.env.NODE_ENV === "production") {
-      const distPath = path.join(process.cwd(), "dist", "public");
-      const indexPath = path.join(distPath, "index.html");
-      res.sendFile(indexPath);
-    } else {
-      res.redirect("http://localhost:5173" + req.originalUrl);
-    }
-  });
   const httpServer = createServer(app);
   return httpServer;
 }
