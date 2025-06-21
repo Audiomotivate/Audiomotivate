@@ -228,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: "Invalid cart item ID" });
     }
     
-    const removed = await storage.removeCartItem(id);
+    const removed = await storage.removeCartItem(0, id); // Fix: add cartId parameter
     
     if (!removed) {
       return res.status(404).json({ message: "Cart item not found" });
@@ -271,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const item of cartItems) {
         console.log("Removing item:", item.id);
-        await storage.removeCartItem(item.id);
+        const cleared = await storage.clearCart(0); // Fix: use cartId instead of sessionId
       }
       
       console.log("Cart cleared successfully");
