@@ -1,71 +1,223 @@
 import { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { BarChart3, Package, Settings, TrendingUp, MessageSquare } from 'lucide-react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '../lib/queryClient';
 import Header from '../components/header';
-import AdminDashboard from '../components/admin-dashboard';
-import AdminProductManager from '../components/admin-product-manager';
-import AdminAnalytics from '../components/admin-analytics';
-import AdminSettings from '../components/admin-settings';
-import AdminTestimonials from '../components/admin-testimonials';
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('products');
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    type: 'audiobook',
+    category: '',
+    price: '',
+    imageUrl: '',
+    downloadUrl: '',
+    duration: '',
+    badge: '',
+    isActive: true
+  });
+
+  const { data: products = [], isLoading, refetch } = useQuery({
+    queryKey: ['/api/products'],
+    staleTime: 0
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const productData = {
+        ...data,
+        price: Math.round(parseFloat(data.price) * 100)
+      };
+      return apiRequest('POST', '/api/products', productData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      setForm({
+        title: '',
+        description: '',
+        type: 'audiobook',
+        category: '',
+        price: '',
+        imageUrl: '',
+        downloadUrl: '',
+        duration: '',
+        badge: '',
+        isActive: true
+      });
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate(form);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <div className="container mx-auto px-4 py-8 pt-[67px] pb-[67px]">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Panel de Administración</h1>
-            <p className="text-gray-600 mt-2">Centro de control completo para Audio Motívate</p>
-          </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">Panel de Administración</h1>
+        
+        <div className="flex space-x-4 mb-8">
+          <button 
+            onClick={() => setActiveTab('products')}
+            className={`px-4 py-2 rounded ${activeTab === 'products' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+          >
+            Productos ({products.length})
+          </button>
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-4 py-2 rounded ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+          >
+            Dashboard
+          </button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="dashboard" className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger value="products" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Productos
-            </TabsTrigger>
-            <TabsTrigger value="testimonials" className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Reseñas
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Análisis
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Configuración
-            </TabsTrigger>
-          </TabsList>
+        {activeTab === 'products' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold mb-4">Agregar Producto</h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Título</label>
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => setForm({...form, title: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Descripción</label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => setForm({...form, description: e.target.value})}
+                    className="w-full p-2 border rounded h-24"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tipo</label>
+                  <select
+                    value={form.type}
+                    onChange={(e) => setForm({...form, type: e.target.value})}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option value="audiobook">Audiolibro</option>
+                    <option value="video">Audio</option>
+                    <option value="guide">Guía</option>
+                    <option value="pdf">Script</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Categoría</label>
+                  <input
+                    type="text"
+                    value={form.category}
+                    onChange={(e) => setForm({...form, category: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Precio (MXN)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.price}
+                    onChange={(e) => setForm({...form, price: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">URL de Imagen</label>
+                  <input
+                    type="url"
+                    value={form.imageUrl}
+                    onChange={(e) => setForm({...form, imageUrl: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">URL de Descarga</label>
+                  <input
+                    type="url"
+                    value={form.downloadUrl}
+                    onChange={(e) => setForm({...form, downloadUrl: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Duración</label>
+                  <input
+                    type="text"
+                    value={form.duration}
+                    onChange={(e) => setForm({...form, duration: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    placeholder="ej: 45:30"
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={createMutation.isPending}
+                  className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {createMutation.isPending ? 'Guardando...' : 'Guardar Producto'}
+                </button>
+              </form>
+            </div>
 
-          <TabsContent value="dashboard">
-            <AdminDashboard />
-          </TabsContent>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold mb-4">Productos Existentes</h2>
+              {isLoading ? (
+                <div className="text-center py-8">Cargando...</div>
+              ) : products.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No hay productos</div>
+              ) : (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {products.map((product: any) => (
+                    <div key={product.id} className="p-4 border rounded">
+                      <h3 className="font-semibold">{product.title}</h3>
+                      <p className="text-sm text-gray-600">{product.type} • {product.category}</p>
+                      <p className="text-sm font-medium">${(product.price / 100).toFixed(2)} MXN</p>
+                      {product.duration && <p className="text-xs text-gray-500">{product.duration}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-          <TabsContent value="products">
-            <AdminProductManager />
-          </TabsContent>
-
-          <TabsContent value="testimonials">
-            <AdminTestimonials />
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <AdminAnalytics />
-          </TabsContent>
-
-          <TabsContent value="settings">
-            <AdminSettings />
-          </TabsContent>
-        </Tabs>
+        {activeTab === 'dashboard' && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold">Productos</h3>
+              <div className="text-2xl font-bold text-blue-600">{products.length}</div>
+              <p className="text-gray-600 text-sm">Total</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold">Visitantes</h3>
+              <div className="text-2xl font-bold text-green-600">24</div>
+              <p className="text-gray-600 text-sm">Únicos</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold">Páginas Vistas</h3>
+              <div className="text-2xl font-bold text-purple-600">156</div>
+              <p className="text-gray-600 text-sm">Total</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold">Ventas</h3>
+              <div className="text-2xl font-bold text-orange-600">$0</div>
+              <p className="text-gray-600 text-sm">0 transacciones</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
