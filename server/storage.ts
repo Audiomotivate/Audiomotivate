@@ -57,7 +57,7 @@ class PostgresStorage implements IStorage {
   }
 
   async getProductsByType(type: string): Promise<Product[]> {
-    return await db.select().from(products).where(eq(products.type, type));
+    return await db.select().from(products).where(eq(products.type, type as "audiobook" | "video" | "pdf" | "guide"));
   }
 
   async createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product> {
@@ -83,15 +83,11 @@ class PostgresStorage implements IStorage {
   }
 
   async getAllTestimonials(): Promise<Testimonial[]> {
-    return await db.select().from(testimonials).orderBy(testimonials.createdAt);
+    return await db.select().from(testimonials);
   }
 
   async createTestimonial(testimonial: Omit<Testimonial, 'id' | 'createdAt' | 'updatedAt'>): Promise<Testimonial> {
-    const [newTestimonial] = await db.insert(testimonials).values({
-      ...testimonial,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
+    const [newTestimonial] = await db.insert(testimonials).values(testimonial).returning();
     return newTestimonial;
   }
 
@@ -146,8 +142,7 @@ class PostgresStorage implements IStorage {
     if (existingItem.length > 0) {
       const [updatedItem] = await db.update(cartItems)
         .set({ 
-          quantity: existingItem[0].quantity + item.quantity,
-          updatedAt: new Date()
+          quantity: existingItem[0].quantity + (item.quantity || 1)
         })
         .where(eq(cartItems.id, existingItem[0].id))
         .returning();
@@ -156,18 +151,14 @@ class PostgresStorage implements IStorage {
 
     const [newItem] = await db.insert(cartItems).values({
       ...item,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      quantity: item.quantity || 1
     }).returning();
     return newItem;
   }
 
   async updateCartItemQuantity(itemId: number, quantity: number): Promise<CartItem | null> {
     const [updatedItem] = await db.update(cartItems)
-      .set({ 
-        quantity,
-        updatedAt: new Date()
-      })
+      .set({ quantity })
       .where(eq(cartItems.id, itemId))
       .returning();
     return updatedItem || null;
