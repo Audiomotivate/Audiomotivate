@@ -19,4 +19,4 @@ Configurado para Vercel con deployment automático desde GitHub.
 
 ## 📱 Características
 
-
+Updated: Jun 21, 2025
