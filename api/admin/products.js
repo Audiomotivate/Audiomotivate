@@ -1,6 +1,7 @@
 const { neon } = require('@neondatabase/serverless');
 
-module.exports = async function handler(req, res) {
+module.exports = async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -48,6 +49,44 @@ module.exports = async function handler(req, res) {
       `;
       
       return res.status(201).json(product);
+    }
+
+    if (req.method === 'PUT') {
+      const { id } = req.query;
+      const updateData = req.body;
+      
+      const [product] = await sql`
+        UPDATE products 
+        SET title = ${updateData.title},
+            description = ${updateData.description},
+            type = ${updateData.type},
+            category = ${updateData.category},
+            price = ${updateData.price},
+            "imageUrl" = ${updateData.imageUrl},
+            "downloadUrl" = ${updateData.downloadUrl},
+            "previewUrl" = ${updateData.previewUrl},
+            duration = ${updateData.duration},
+            badge = ${updateData.badge},
+            "isBestseller" = ${updateData.isBestseller},
+            "isNew" = ${updateData.isNew},
+            "updatedAt" = NOW()
+        WHERE id = ${id}
+        RETURNING *
+      `;
+      
+      return res.status(200).json(product);
+    }
+
+    if (req.method === 'DELETE') {
+      const { id } = req.query;
+      
+      await sql`
+        UPDATE products 
+        SET is_active = false, "updatedAt" = NOW()
+        WHERE id = ${id}
+      `;
+      
+      return res.status(200).json({ success: true });
     }
     
     return res.status(405).json({ error: 'Method not allowed' });
