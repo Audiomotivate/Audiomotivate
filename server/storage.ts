@@ -51,7 +51,7 @@ export class PostgresStorage implements IStorage {
   };
 
   async getAllProducts(): Promise<Product[]> {
-    return await db.select().from(products);
+    return await db.select().from(products).where(eq(products.isActive, true));
   }
 
   async getProductsByType(type: string): Promise<Product[]> {
@@ -59,23 +59,22 @@ export class PostgresStorage implements IStorage {
       .where(and(eq(products.type, type as any), eq(products.isActive, true)));
   }
 
+  async getProduct(id: number): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product;
+  }
+
   async getProductById(id: number): Promise<Product | undefined> {
     return this.getProduct(id);
   }
 
-  async getProductById(id: number): Promise<Product | undefined> {
-    return await this.getProduct(id);
-  }
-
-   async updateCartItemQuantity(itemId: number, quantity: number): Promise<CartItem | undefined> {
-    for (const [cartId, items] of this.cartItems.entries()) {
-      const item = items.find(item => item.id === itemId);
-      if (item) {
-        item.quantity = quantity;
-        return item;
-      }
-    }
-    return undefined;
+  async createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product> {
+    const [newProduct] = await db.insert(products).values({
+      ...product,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return newProduct;
   }
 
   async updateProduct(id: number, productData: Partial<Product>): Promise<Product | undefined> {
@@ -95,7 +94,11 @@ export class PostgresStorage implements IStorage {
     let [cart] = await db.select().from(carts).where(eq(carts.sessionId, sessionId));
     
     if (!cart) {
-      cart = await this.createCart({ sessionId });
+      [cart] = await db.insert(carts).values({
+        sessionId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
     }
     
     return cart;
@@ -107,6 +110,7 @@ export class PostgresStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning();
+    
     return cart;
   }
 
@@ -141,14 +145,17 @@ export class PostgresStorage implements IStorage {
     }
     
     const newItem: CartItem = {
-      id: items.length + 1,
+      id: Date.now(),
       cartId: insertItem.cartId,
       productId: insertItem.productId,
       quantity: insertItem.quantity || 1,
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
     
     items.push(newItem);
     this.cartItems.set(insertItem.cartId, items);
+    
     return newItem;
   }
 
@@ -164,17 +171,6 @@ export class PostgresStorage implements IStorage {
     return undefined;
   }
 
-  async updateCartItemQuantity(itemId: number, quantity: number): Promise<CartItem | undefined> {
-    for (const [cartId, items] of this.cartItems.entries()) {
-      const item = items.find(item => item.id === itemId);
-      if (item) {
-        item.quantity = quantity;
-        return item;
-      }
-    }
-    return undefined;
-  }
-
   async removeCartItem(cartId: number, productId: number): Promise<boolean> {
     const items = this.cartItems.get(cartId) || [];
     const index = items.findIndex(item => item.productId === productId);
@@ -186,6 +182,17 @@ export class PostgresStorage implements IStorage {
     }
     
     return false;
+  }
+
+  async updateCartItemQuantity(itemId: number, quantity: number): Promise<CartItem | undefined> {
+    for (const [cartId, items] of this.cartItems.entries()) {
+      const item = items.find(item => item.id === itemId);
+      if (item) {
+        item.quantity = quantity;
+        return item;
+      }
+    }
+    return undefined;
   }
 
   async clearCart(cartId: number): Promise<boolean> {
@@ -221,10 +228,11 @@ export class PostgresStorage implements IStorage {
 
   async getAnalytics(): Promise<any> {
     return {
-      pageViews: this.analytics.pageViews.length,
-      sessions: this.analytics.sessions.length,
-      visitors: this.analytics.visitors.size,
-      recentPageViews: this.analytics.pageViews.slice(-10)
+      totalPageViews: this.analytics.pageViews.length,
+      totalSessions: this.analytics.sessions.length,
+      uniqueVisitors: this.analytics.visitors.size,
+      recentPageViews: this.analytics.pageViews.slice(-10),
+      recentSessions: this.analytics.sessions.slice(-10)
     };
   }
 
@@ -232,16 +240,17 @@ export class PostgresStorage implements IStorage {
     const [settings] = await db.select().from(adminSettings).limit(1);
     
     if (!settings) {
-      const defaultSettings = {
+      const [newSettings] = await db.insert(adminSettings).values({
         siteName: "Audio Motívate",
         siteDescription: "Plataforma de contenido motivacional digital",
         enableRegistration: true,
         maintenanceMode: false,
         analyticsEnabled: true,
-        emailNotifications: true
-      };
+        emailNotifications: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
       
-      const [newSettings] = await db.insert(adminSettings).values(defaultSettings).returning();
       return newSettings;
     }
     
@@ -249,11 +258,8 @@ export class PostgresStorage implements IStorage {
   }
 
   async updateAdminSettings(settingsData: Partial<AdminSettings>): Promise<AdminSettings> {
-    const currentSettings = await this.getAdminSettings();
-    
     const [updatedSettings] = await db.update(adminSettings)
-      .set(settingsData)
-      .where(eq(adminSettings.id, currentSettings.id))
+      .set({ ...settingsData, updatedAt: new Date() })
       .returning();
     
     return updatedSettings;
