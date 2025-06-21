@@ -9,6 +9,7 @@ import Stripe from "stripe";
 import { registerAdminRoutes } from "./admin";
 import { registerAnalyticsRoutes } from "./analytics";
 import { registerMockAnalyticsRoute } from "./mock-analytics";
+import fs from "fs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Servir archivos de preview de audio con headers CORS apropiados
@@ -425,6 +426,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register mock analytics route for development
   registerMockAnalyticsRoute(app);
+
+  // Serve admin panel (only in production)
+  if (process.env.NODE_ENV === "production") {
+    app.get("/admin", (req: Request, res: Response) => {
+      const distPath = path.join(process.cwd(), "dist", "public");
+      const indexPath = path.join(distPath, "index.html");
+      res.sendFile(indexPath);
+    });
+
+    app.get("/admin/*", (req: Request, res: Response) => {
+      const distPath = path.join(process.cwd(), "dist", "public");
+      const indexPath = path.join(distPath, "index.html");
+      res.sendFile(indexPath);
+    });
+  }
 
   const httpServer = createServer(app);
   return httpServer;
