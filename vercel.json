@@ -21,7 +21,11 @@
       "dest": "server/index.ts"
     },
     {
-      "src": "/admin(.*)",
+      "src": "/admin$",
+      "dest": "server/index.ts"
+    },
+    {
+      "src": "/admin/(.*)",
       "dest": "server/index.ts"
     },
     {
