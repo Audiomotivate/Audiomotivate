@@ -9,7 +9,6 @@ import Stripe from "stripe";
 import { registerAdminRoutes } from "./admin";
 import { registerAnalyticsRoutes } from "./analytics";
 import { registerMockAnalyticsRoute } from "./mock-analytics";
-//import { registerSettingsRoutes } from "./admin-settings";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Servir archivos de preview de audio con headers CORS apropiados
@@ -29,6 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   });
+  
   // Initialize Stripe
   let stripe: Stripe | null = null;
   if (process.env.STRIPE_SECRET_KEY) {
@@ -271,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const item of cartItems) {
         console.log("Removing item:", item.id);
-        const cleared = await storage.clearCart(0); // Fix: use cartId instead of sessionId
+        await storage.removeCartItem(0, item.id); // Fix: use cartId instead of sessionId
       }
       
       console.log("Cart cleared successfully");
@@ -356,13 +356,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ received: true });
   });
 
+  // Admin system info route
+  router.get("/admin/system", async (req: Request, res: Response) => {
+    try {
+      const analytics = await storage.getAnalytics();
+      const products = await storage.getAllProducts();
+      const testimonials = await storage.getAllTestimonials();
+      
+      const systemInfo = {
+        status: "operational",
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        nodeVersion: process.version,
+        platform: process.platform,
+        environment: process.env.NODE_ENV || 'development',
+        database: {
+          status: "connected",
+          provider: "neon-postgresql"
+        },
+        analytics: {
+          totalPageViews: analytics.pageViews,
+          totalSessions: analytics.sessions,
+          uniqueVisitors: analytics.visitors
+        },
+        content: {
+          totalProducts: products.length,
+          activeProducts: products.filter(p => p.isActive).length,
+          productsByType: {
+            audiobook: products.filter(p => p.type === 'audiobook').length,
+            video: products.filter(p => p.type === 'video').length,
+            guide: products.filter(p => p.type === 'guide').length,
+            pdf: products.filter(p => p.type === 'pdf').length
+          },
+          totalTestimonials: testimonials.length
+        }
+      };
+
+      res.json(systemInfo);
+    } catch (error) {
+      console.error("Error getting system info:", error);
+      res.status(500).json({ error: "Failed to get system information" });
+    }
+  });
+
+  // Admin settings routes
+  router.get("/admin/settings", async (req: Request, res: Response) => {
+    try {
+      const settings = await storage.getAdminSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("Error getting settings:", error);
+      res.status(500).json({ error: "Failed to get settings" });
+    }
+  });
+
+  router.put("/admin/settings", async (req: Request, res: Response) => {
+    try {
+      const updatedSettings = await storage.updateAdminSettings(req.body);
+      res.json(updatedSettings);
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
   // Register analytics routes
   registerAnalyticsRoutes(app);
   
   // Register mock analytics route for development
   registerMockAnalyticsRoute(app);
-  
-  // Admin settings routes will be added after fixing dependencies
 
   const httpServer = createServer(app);
   return httpServer;
