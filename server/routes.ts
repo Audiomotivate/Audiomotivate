@@ -9,7 +9,7 @@ import Stripe from "stripe";
 import { registerAdminRoutes } from "./admin";
 import { registerAnalyticsRoutes } from "./analytics";
 import { registerMockAnalyticsRoute } from "./mock-analytics";
-import { registerSettingsRoutes } from "./admin-settings";
+//import { registerSettingsRoutes } from "./admin-settings";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Servir archivos de preview de audio con headers CORS apropiados
