@@ -362,8 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register mock analytics route for development
   registerMockAnalyticsRoute(app);
   
-  // Register settings routes
-  registerSettingsRoutes(app);
+  // Admin settings routes will be added after fixing dependencies
 
   const httpServer = createServer(app);
   return httpServer;
