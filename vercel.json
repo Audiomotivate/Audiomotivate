@@ -15,11 +15,19 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
-    {
-      "handle": "filesystem"
-    },
-    {
+ "routes": [
+  {
+    "src": "/api/(.*)",
+    "dest": "/api/$1"
+  },
+  {
+    "handle": "filesystem"
+  },
+  {
+    "src": "/(.*)", 
+    "dest": "/index.html"
+  }
+]
       "src": "/(.*)",
       "dest": "/index.html"
     }
