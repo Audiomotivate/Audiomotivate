@@ -6,8 +6,8 @@
       "use": "@vercel/static-build",
       "config": {
         "installCommand": "npm install --legacy-peer-deps",
-        "buildCommand": "ls -la && find . -name '*.tsx' -o -name '*.ts' | head -10 && npx vite build",
-        "outputDirectory": "public"
+        "buildCommand": "npx vite build",
+        "outputDirectory": "dist/public"
       }
     },
     {
@@ -30,7 +30,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "public/index.html"
+      "dest": "dist/public/index.html"
     }
   ]
 }
