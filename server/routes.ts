@@ -36,14 +36,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       apiVersion: "2023-10-16" as any,
     });
   }
+  // Lightweight admin routes
+  app.get("/api/admin/products", (req, res) => {
+    // Use regular products endpoint for admin
+    res.redirect('/api/products');
+  });
 
-  // Register admin routes first
-  registerAdminRoutes(app);
-
-  // Create router for API routes
-  const router = express.Router();
-  app.use("/api", router);
-  
+  app.post("/api/admin/products", (req, res) => {
+    // Use regular products endpoint for admin  
+    res.redirect(307, '/api/products');
+  });
   // Get all products
   router.get("/products", async (req: Request, res: Response) => {
     const products = await storage.getAllProducts();
