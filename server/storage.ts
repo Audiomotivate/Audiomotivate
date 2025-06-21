@@ -59,22 +59,23 @@ export class PostgresStorage implements IStorage {
       .where(and(eq(products.type, type as any), eq(products.isActive, true)));
   }
 
-  async getProduct(id: number): Promise<Product | undefined> {
-    const [product] = await db.select().from(products).where(eq(products.id, id));
-    return product;
+  async getProductById(id: number): Promise<Product | undefined> {
+    return this.getProduct(id);
   }
 
   async getProductById(id: number): Promise<Product | undefined> {
     return await this.getProduct(id);
   }
 
-  async createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product> {
-    const [newProduct] = await db.insert(products).values({
-      ...product,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-    return newProduct;
+   async updateCartItemQuantity(itemId: number, quantity: number): Promise<CartItem | undefined> {
+    for (const [cartId, items] of this.cartItems.entries()) {
+      const item = items.find(item => item.id === itemId);
+      if (item) {
+        item.quantity = quantity;
+        return item;
+      }
+    }
+    return undefined;
   }
 
   async updateProduct(id: number, productData: Partial<Product>): Promise<Product | undefined> {
