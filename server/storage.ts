@@ -1,83 +1,58 @@
-import { 
-  products, 
-  type Product, 
-  type InsertProduct,
-  carts,
-  type Cart,
-  type InsertCart,
-  cartItems,
-  type CartItem,
-  type InsertCartItem,
-  testimonials,
-  type Testimonial,
-  type InsertTestimonial,
-  users,
-  type User,
-  type InsertUser,
-  siteSettings,
-  type SiteSettings,
-  type InsertSiteSettings
-} from "@shared/schema";
-import { eq, and } from "drizzle-orm";
-import { db } from "./db";
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+import { products, carts, cartItems, testimonials, users, adminSettings } from "../shared/schema";
+import type { Product, Cart, CartItem, InsertCartItem, Testimonial, AdminSettings } from "../shared/schema";
+import { eq, and, desc } from "drizzle-orm";
+
+const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql);
 
 export interface IStorage {
-  // User operations
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-
-  // Product operations
+  // Products
   getAllProducts(): Promise<Product[]>;
   getProductsByType(type: string): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
-  getProductById(id: number): Promise<Product | undefined>;
-  createProduct(product: InsertProduct): Promise<Product>;
+  createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product>;
+  updateProduct(id: number, product: Partial<Product>): Promise<Product | undefined>;
+  deleteProduct(id: number): Promise<boolean>;
 
-  // Cart operations
-  getCart(sessionId: string): Promise<Cart | undefined>;
-  createCart(cart: InsertCart): Promise<Cart>;
-  
-  // Cart items operations
-  getCartItems(cartId: number): Promise<CartItem[]>;
-  getCartItemsWithProducts(cartId: number): Promise<(CartItem & { product: Product })[]>;
+  // Cart
+  getCart(sessionId: string): Promise<Cart>;
   addCartItem(item: InsertCartItem): Promise<CartItem>;
-  updateCartItemQuantity(id: number, quantity: number): Promise<CartItem | undefined>;
-  removeCartItem(id: number): Promise<boolean>;
-  
-  // Testimonial operations
+  updateCartItem(cartId: number, productId: number, quantity: number): Promise<CartItem | undefined>;
+  removeCartItem(cartId: number, productId: number): Promise<boolean>;
+  clearCart(cartId: number): Promise<boolean>;
+  getCartItems(cartId: number): Promise<CartItem[]>;
+
+  // Testimonials
   getAllTestimonials(): Promise<Testimonial[]>;
-  createTestimonial(testimonial: InsertTestimonial): Promise<Testimonial>;
-  
-  // Site settings operations
-  getSiteSettings(): Promise<SiteSettings | undefined>;
-  updateSiteSettings(settings: Partial<SiteSettings>): Promise<SiteSettings>;
-  initializeSiteSettings(): Promise<SiteSettings>;
+
+  // Analytics
+  recordPageView(page: string, userAgent?: string, ip?: string): Promise<void>;
+  recordSession(sessionId: string, userAgent?: string, ip?: string): Promise<void>;
+  getAnalytics(): Promise<any>;
+
+  // Admin Settings
+  getAdminSettings(): Promise<AdminSettings>;
+  updateAdminSettings(settings: Partial<AdminSettings>): Promise<AdminSettings>;
 }
 
-// Use database storage
-export class DatabaseStorage implements IStorage {
-  // User operations - simplified for now
-  async getUser(id: number): Promise<User | undefined> {
-    return undefined; // Will implement when auth is needed
-  }
+export class PostgresStorage implements IStorage {
+  // In-memory storage for demo purposes (can be replaced with actual database calls)
+  private cartItems = new Map<number, CartItem[]>();
+  private analytics = {
+    pageViews: [] as any[],
+    sessions: [] as any[],
+    visitors: new Set<string>()
+  };
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return undefined;
-  }
-
-  async createUser(user: InsertUser): Promise<User> {
-    throw new Error("Not implemented");
-  }
-
-  // Product operations using database
   async getAllProducts(): Promise<Product[]> {
     return await db.select().from(products);
   }
 
   async getProductsByType(type: string): Promise<Product[]> {
     return await db.select().from(products)
-      .where(and(eq(products.type, type), eq(products.isActive, true)));
+      .where(and(eq(products.type, type as any), eq(products.isActive, true)));
   }
 
   async getProduct(id: number): Promise<Product | undefined> {
@@ -85,59 +60,51 @@ export class DatabaseStorage implements IStorage {
     return product;
   }
 
-  async getProductById(id: number): Promise<Product | undefined> {
-    return this.getProduct(id);
-  }
-
-  async createProduct(insertProduct: InsertProduct): Promise<Product> {
-    const [product] = await db.insert(products).values(insertProduct).returning();
-    return product;
-  }
-
-  // Cart operations - keep in memory for session management
-  private carts = new Map<string, Cart>();
-  private cartItems = new Map<number, CartItem[]>();
-  private cartId = 1;
-
-  async getCart(sessionId: string): Promise<Cart | undefined> {
-    return this.carts.get(sessionId);
-  }
-
-  async createCart(insertCart: InsertCart): Promise<Cart> {
-    const cart: Cart = {
-      id: this.cartId++,
-      sessionId: insertCart.sessionId,
+  async createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product> {
+    const [newProduct] = await db.insert(products).values({
+      ...product,
       createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.carts.set(insertCart.sessionId, cart);
-    this.cartItems.set(cart.id, []);
+      updatedAt: new Date()
+    }).returning();
+    return newProduct;
+  }
+
+  async updateProduct(id: number, productData: Partial<Product>): Promise<Product | undefined> {
+    const [updatedProduct] = await db.update(products)
+      .set({ ...productData, updatedAt: new Date() })
+      .where(eq(products.id, id))
+      .returning();
+    return updatedProduct;
+  }
+
+  async deleteProduct(id: number): Promise<boolean> {
+    const result = await db.delete(products).where(eq(products.id, id));
+    return result.rowCount > 0;
+  }
+
+  async getCart(sessionId: string): Promise<Cart> {
+    let [cart] = await db.select().from(carts).where(eq(carts.sessionId, sessionId));
+    
+    if (!cart) {
+      [cart] = await db.insert(carts).values({
+        sessionId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
+    }
+    
     return cart;
   }
 
   async getCartItems(cartId: number): Promise<CartItem[]> {
-    return this.cartItems.get(cartId) || [];
-  }
-
-  async getCartItemsWithProducts(cartId: number): Promise<(CartItem & { product: Product })[]> {
-    const items = this.cartItems.get(cartId) || [];
-    const result: (CartItem & { product: Product })[] = [];
-    
-    for (const item of items) {
-      const product = await this.getProduct(item.productId);
-      if (product) {
-        result.push({ ...item, product });
-      }
-    }
-    
-    return result;
+    return await db.select().from(cartItems).where(eq(cartItems.cartId, cartId));
   }
 
   async addCartItem(insertItem: InsertCartItem): Promise<CartItem> {
     const items = this.cartItems.get(insertItem.cartId) || [];
     const existingItem = items.find(item => item.productId === insertItem.productId);
     
-    if (existingItem) {
+    if (existingItem && insertItem.quantity) {
       existingItem.quantity += insertItem.quantity;
       return existingItem;
     }
@@ -146,7 +113,7 @@ export class DatabaseStorage implements IStorage {
       id: items.length + 1,
       cartId: insertItem.cartId,
       productId: insertItem.productId,
-      quantity: insertItem.quantity,
+      quantity: insertItem.quantity || 1,
     };
     
     items.push(newItem);
@@ -154,83 +121,101 @@ export class DatabaseStorage implements IStorage {
     return newItem;
   }
 
-  async updateCartItemQuantity(id: number, quantity: number): Promise<CartItem | undefined> {
-    for (const [cartId, items] of this.cartItems.entries()) {
-      const item = items.find(item => item.id === id);
-      if (item) {
-        item.quantity = quantity;
-        return item;
-      }
+  async updateCartItem(cartId: number, productId: number, quantity: number): Promise<CartItem | undefined> {
+    const items = this.cartItems.get(cartId) || [];
+    const item = items.find(item => item.productId === productId);
+    
+    if (item) {
+      item.quantity = quantity;
+      return item;
     }
+    
     return undefined;
   }
 
-  async removeCartItem(id: number): Promise<boolean> {
-    for (const [cartId, items] of this.cartItems.entries()) {
-      const index = items.findIndex(item => item.id === id);
-      if (index !== -1) {
-        items.splice(index, 1);
-        return true;
-      }
+  async removeCartItem(cartId: number, productId: number): Promise<boolean> {
+    const items = this.cartItems.get(cartId) || [];
+    const index = items.findIndex(item => item.productId === productId);
+    
+    if (index !== -1) {
+      items.splice(index, 1);
+      this.cartItems.set(cartId, items);
+      return true;
     }
+    
     return false;
   }
 
-  // Testimonial operations
+  async clearCart(cartId: number): Promise<boolean> {
+    this.cartItems.set(cartId, []);
+    return true;
+  }
+
   async getAllTestimonials(): Promise<Testimonial[]> {
     return await db.select().from(testimonials);
   }
 
-  async createTestimonial(testimonial: InsertTestimonial): Promise<Testimonial> {
-    throw new Error("Not implemented");
-  }
-
-  // Site settings operations
-  async getSiteSettings(): Promise<SiteSettings | undefined> {
-    const [settings] = await db.select().from(siteSettings).limit(1);
-    if (!settings) {
-      return await this.initializeSiteSettings();
-    }
-    return settings;
-  }
-
-  async updateSiteSettings(settingsUpdate: Partial<SiteSettings>): Promise<SiteSettings> {
-    const currentSettings = await this.getSiteSettings();
+  async recordPageView(page: string, userAgent?: string, ip?: string): Promise<void> {
+    this.analytics.pageViews.push({
+      page,
+      userAgent,
+      ip,
+      timestamp: new Date()
+    });
     
-    if (!currentSettings) {
-      const newSettings = await this.initializeSiteSettings();
-      if (Object.keys(settingsUpdate).length === 0) {
-        return newSettings;
-      }
+    if (ip) {
+      this.analytics.visitors.add(ip);
     }
-
-    const [updatedSettings] = await db
-      .update(siteSettings)
-      .set({
-        ...settingsUpdate,
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return updatedSettings;
   }
 
-  async initializeSiteSettings(): Promise<SiteSettings> {
-    const defaultSettings: InsertSiteSettings = {
-      siteName: 'Audio Motívate',
-      siteDescription: 'Tu plataforma de contenido motivacional premium sin anuncios',
-      contactEmail: 'info.audiomotivate@gmail.com',
-      domainUrl: 'www.audiomotivate.com',
-      enableAnalytics: true,
-      enableEmailNotifications: true,
-      maintenanceMode: false,
-      maxUploadSize: 100,
-      allowGuestCheckout: true,
-    };
+  async recordSession(sessionId: string, userAgent?: string, ip?: string): Promise<void> {
+    this.analytics.sessions.push({
+      sessionId,
+      userAgent,
+      ip,
+      timestamp: new Date()
+    });
+  }
 
-    const [settings] = await db.insert(siteSettings).values(defaultSettings).returning();
+  async getAnalytics(): Promise<any> {
+    return {
+      pageViews: this.analytics.pageViews.length,
+      sessions: this.analytics.sessions.length,
+      visitors: this.analytics.visitors.size,
+      recentPageViews: this.analytics.pageViews.slice(-10)
+    };
+  }
+
+  async getAdminSettings(): Promise<AdminSettings> {
+    const [settings] = await db.select().from(adminSettings).limit(1);
+    
+    if (!settings) {
+      const defaultSettings = {
+        siteName: "Audio Motívate",
+        siteDescription: "Plataforma de contenido motivacional digital",
+        enableRegistration: true,
+        maintenanceMode: false,
+        analyticsEnabled: true,
+        emailNotifications: true
+      };
+      
+      const [newSettings] = await db.insert(adminSettings).values(defaultSettings).returning();
+      return newSettings;
+    }
+    
     return settings;
+  }
+
+  async updateAdminSettings(settingsData: Partial<AdminSettings>): Promise<AdminSettings> {
+    const currentSettings = await this.getAdminSettings();
+    
+    const [updatedSettings] = await db.update(adminSettings)
+      .set(settingsData)
+      .where(eq(adminSettings.id, currentSettings.id))
+      .returning();
+    
+    return updatedSettings;
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new PostgresStorage();
