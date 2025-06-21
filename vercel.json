@@ -19,6 +19,10 @@
       "dest": "/server/index.ts"
     },
     {
+      "src": "/admin(.*)",
+      "dest": "/dist/public/index.html"
+    },
+    {
       "handle": "filesystem"
     },
     {
