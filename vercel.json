@@ -5,7 +5,9 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist/public"
+        "installCommand": "npm install --legacy-peer-deps",
+        "buildCommand": "ls -la && find . -name '*.tsx' -o -name '*.ts' | head -10 && npx vite build",
+        "outputDirectory": "public"
       }
     },
     {
@@ -16,18 +18,15 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/server/index.ts"
+      "dest": "server/index.ts"
     },
     {
       "src": "/admin(.*)",
-      "dest": "/dist/public/index.html"
-    },
-    {
-      "handle": "filesystem"
+      "dest": "server/index.ts"
     },
     {
       "src": "/(.*)",
-      "dest": "/dist/public/index.html"
+      "dest": "public/index.html"
     }
   ]
 }
