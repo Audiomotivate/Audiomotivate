@@ -12,17 +12,21 @@ export interface IStorage {
   getAllProducts(): Promise<Product[]>;
   getProductsByType(type: string): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
+  getProductById(id: number): Promise<Product | undefined>;
   createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product>;
   updateProduct(id: number, product: Partial<Product>): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<boolean>;
 
   // Cart
   getCart(sessionId: string): Promise<Cart>;
+  createCart(data: { sessionId: string }): Promise<Cart>;
   addCartItem(item: InsertCartItem): Promise<CartItem>;
   updateCartItem(cartId: number, productId: number, quantity: number): Promise<CartItem | undefined>;
+  updateCartItemQuantity(itemId: number, quantity: number): Promise<CartItem | undefined>;
   removeCartItem(cartId: number, productId: number): Promise<boolean>;
   clearCart(cartId: number): Promise<boolean>;
   getCartItems(cartId: number): Promise<CartItem[]>;
+  getCartItemsWithProducts(cartId: number): Promise<any[]>;
 
   // Testimonials
   getAllTestimonials(): Promise<Testimonial[]>;
@@ -60,6 +64,10 @@ export class PostgresStorage implements IStorage {
     return product;
   }
 
+  async getProductById(id: number): Promise<Product | undefined> {
+    return await this.getProduct(id);
+  }
+
   async createProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product> {
     const [newProduct] = await db.insert(products).values({
       ...product,
@@ -86,18 +94,40 @@ export class PostgresStorage implements IStorage {
     let [cart] = await db.select().from(carts).where(eq(carts.sessionId, sessionId));
     
     if (!cart) {
-      [cart] = await db.insert(carts).values({
-        sessionId,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }).returning();
+      cart = await this.createCart({ sessionId });
     }
     
     return cart;
   }
 
+  async createCart(data: { sessionId: string }): Promise<Cart> {
+    const [cart] = await db.insert(carts).values({
+      sessionId: data.sessionId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+    return cart;
+  }
+
   async getCartItems(cartId: number): Promise<CartItem[]> {
     return await db.select().from(cartItems).where(eq(cartItems.cartId, cartId));
+  }
+
+  async getCartItemsWithProducts(cartId: number): Promise<any[]> {
+    const items = this.cartItems.get(cartId) || [];
+    const result = [];
+    
+    for (const item of items) {
+      const product = await this.getProduct(item.productId);
+      if (product) {
+        result.push({
+          ...item,
+          product
+        });
+      }
+    }
+    
+    return result;
   }
 
   async addCartItem(insertItem: InsertCartItem): Promise<CartItem> {
@@ -130,6 +160,17 @@ export class PostgresStorage implements IStorage {
       return item;
     }
     
+    return undefined;
+  }
+
+  async updateCartItemQuantity(itemId: number, quantity: number): Promise<CartItem | undefined> {
+    for (const [cartId, items] of this.cartItems.entries()) {
+      const item = items.find(item => item.id === itemId);
+      if (item) {
+        item.quantity = quantity;
+        return item;
+      }
+    }
     return undefined;
   }
 
