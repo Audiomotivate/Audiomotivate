@@ -20,7 +20,8 @@ export default function AdminPanel() {
 
   const { data: products = [], isLoading, refetch } = useQuery({
     queryKey: ['/api/products'],
-    staleTime: 0
+    staleTime: 0,
+    retry: 1
   });
 
   const createMutation = useMutation({
