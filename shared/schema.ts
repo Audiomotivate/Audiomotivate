@@ -36,6 +36,8 @@ export const cartItems = pgTable("cart_items", {
   cartId: integer("cart_id").notNull().references(() => carts.id),
   productId: integer("product_id").notNull().references(() => products.id),
   quantity: integer("quantity").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const testimonials = pgTable("testimonials", {
@@ -44,6 +46,8 @@ export const testimonials = pgTable("testimonials", {
   imageUrl: text("image_url").notNull(),
   rating: integer("rating").notNull(),
   comment: text("comment").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const users = pgTable("users", {
@@ -113,10 +117,10 @@ export const adminSettings = pgTable("admin_settings", {
 });
 
 // Insert schemas
-export const insertProductSchema = createInsertSchema(products).omit({ id: true });
+export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCartSchema = createInsertSchema(carts).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true });
-export const insertTestimonialSchema = createInsertSchema(testimonials).omit({ id: true });
+export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTestimonialSchema = createInsertSchema(testimonials).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
