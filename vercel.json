@@ -1,12 +1,5 @@
 {
-  "functions": {
-    "api/admin/products.js": {
-      "runtime": "nodejs18.x"
-    },
-    "api/products.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
+  "version": 2,
   "builds": [
     {
       "src": "package.json",
