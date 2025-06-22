@@ -1,6 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 
-module.exports = async (req, res) => {
+exports.default = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
