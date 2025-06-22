@@ -1,9 +1,16 @@
 {
-  "version": 2,
+  "functions": {
+    "api/admin/products.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/products.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/static-build", 
+      "use": "@vercel/static-build",
       "config": {
         "installCommand": "npm install",
         "buildCommand": "npx vite build",
