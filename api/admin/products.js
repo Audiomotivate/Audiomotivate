@@ -1,6 +1,7 @@
+// @vercel/node
 const { neon } = require('@neondatabase/serverless');
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -113,4 +114,4 @@ module.exports = async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
-};
+}
