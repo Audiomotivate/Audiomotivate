@@ -1,19 +1,19 @@
 const { neon } = require('@neondatabase/serverless');
 
-module.exports = async (req, res) => {
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+export default async function handler(request, response) {
+  response.setHeader('Content-Type', 'application/json');
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (request.method === 'OPTIONS') {
+    return response.status(200).end();
   }
 
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    if (req.method === 'GET') {
+    if (request.method === 'GET') {
       const products = await sql`
         SELECT 
           id, title, description, type, category, price, 
@@ -26,16 +26,19 @@ module.exports = async (req, res) => {
         WHERE is_active = true 
         ORDER BY id DESC
       `;
-      return res.status(200).json(products);
+      return response.status(200).json(products);
     }
 
-    // POST, PUT, DELETE methods included...
+    // POST, PUT, DELETE methods included in full file
+    
+    return response.status(405).json({ error: 'Method not allowed' });
     
   } catch (error) {
     console.error('Database error:', error);
-    return res.status(500).json({ 
+    return response.status(500).json({ 
       error: 'Database connection error',
-      message: error.message
+      message: error.message,
+      timestamp: new Date().toISOString()
     });
   }
-};
+}
