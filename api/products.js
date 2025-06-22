@@ -1,6 +1,6 @@
 const { neon } = require('@neondatabase/serverless');
 
-exports.default = async (req, res) => {
+module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -17,9 +17,11 @@ exports.default = async (req, res) => {
       const products = await sql`
         SELECT 
           id, title, description, type, category, price, 
-          "imageUrl", "downloadUrl", "previewUrl", duration, 
-          badge, "isBestseller", "isNew", is_active as "isActive",
-          "createdAt", "updatedAt"
+          image_url as "imageUrl", download_url as "downloadUrl", 
+          preview_url as "previewUrl", duration, 
+          badge, is_bestseller as "isBestseller", 
+          is_new as "isNew", is_active as "isActive",
+          created_at as "createdAt", updated_at as "updatedAt"
         FROM products 
         WHERE is_active = true 
         ORDER BY id DESC
@@ -36,13 +38,19 @@ exports.default = async (req, res) => {
       const [product] = await sql`
         INSERT INTO products (
           title, description, type, category, price, 
-          "imageUrl", "downloadUrl", "previewUrl", duration, is_active
+          image_url, download_url, preview_url, duration, is_active
         )
         VALUES (
           ${title}, ${description}, ${type}, ${category}, ${price || 0}, 
           ${imageUrl || ''}, ${downloadUrl || ''}, ${previewUrl || ''}, ${duration || '45:30'}, true
         )
-        RETURNING *
+        RETURNING 
+          id, title, description, type, category, price,
+          image_url as "imageUrl", download_url as "downloadUrl",
+          preview_url as "previewUrl", duration, badge,
+          is_bestseller as "isBestseller", is_new as "isNew",
+          is_active as "isActive", created_at as "createdAt",
+          updated_at as "updatedAt"
       `;
       
       return res.status(201).json(product);
