@@ -18,7 +18,12 @@ export default async function handler(req, res) {
       const products = await sql`
         SELECT 
           id, title, description, type, category, price, 
-          image_url as "imageUrl", download_url as "downloadUrl", 
+          CASE 
+            WHEN image_url LIKE 'https://lh3.googleusercontent.com/d/%' 
+            THEN CONCAT('https://lh3.googleusercontent.com/d/', SUBSTRING(image_url FROM 'https://lh3.googleusercontent.com/d/(.+)'), '=w500-h500')
+            ELSE image_url 
+          END as "imageUrl",
+          download_url as "downloadUrl", 
           preview_url as "previewUrl", duration, 
           badge, is_bestseller as "isBestseller", 
           is_new as "isNew", is_active as "isActive",
