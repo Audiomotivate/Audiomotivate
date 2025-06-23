@@ -9,9 +9,12 @@ import { FileText, ChevronLeft, ChevronRight, Star, Clock } from 'lucide-react';
 import { Link } from 'wouter';
 
 function GuidesSection() {
-  const { data: guides, isLoading } = useQuery<Product[]>({
-    queryKey: ['/api/products/type/guide'],
+  const { data: allProducts = [], isLoading } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+    staleTime: 0,
   });
+
+  const guides = allProducts.filter(product => product.type === 'guide');
 
   return (
     <section id="guias" className="py-8 bg-white">
