@@ -9,9 +9,12 @@ import AddToCartButton from './add-to-cart-button';
 import { Link } from 'wouter';
 
 function PDFSection() {
-  const { data: pdfs, isLoading } = useQuery<Product[]>({
-    queryKey: ['/api/products/type/pdf'],
+  const { data: allProducts = [], isLoading } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+    staleTime: 0,
   });
+
+  const pdfs = allProducts.filter(product => product.type === 'pdf');
 
   return (
     <section id="scripts" className="py-8 bg-gray-50">
