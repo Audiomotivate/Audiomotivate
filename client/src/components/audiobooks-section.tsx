@@ -7,10 +7,12 @@ import { Link } from 'wouter';
 import { Button } from './ui/button';
 
 function AudiobooksSection() {
-  const { data: products, isLoading } = useQuery<Product[]>({
-    queryKey: ['/api/products/type/audiobook'],
+  const { data: allProducts = [], isLoading } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
     staleTime: 0,
   });
+
+  const products = allProducts.filter(product => product.type === 'audiobook');
 
   return (
     <section id="audiolibros" className="py-8 bg-gray-50">
