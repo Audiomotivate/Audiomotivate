@@ -1,19 +1,19 @@
-const { neon } = require('@neondatabase/serverless');
+import { neon } from '@neondatabase/serverless';
 
-export default async function handler(request, response) {
-  response.setHeader('Content-Type', 'application/json');
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Content-Type', 'application/json');
 
-  if (request.method === 'OPTIONS') {
-    return response.status(200).end();
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
   try {
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = neon('postgresql://neondb_owner:npg_qBXg9wN8MpOv@ep-sparkling-river-aazlr1de-pooler.westus3.azure.neon.tech/neondb?sslmode=require');
 
-    if (request.method === 'GET') {
+    if (req.method === 'GET') {
       const products = await sql`
         SELECT 
           id, title, description, type, category, price, 
@@ -26,19 +26,16 @@ export default async function handler(request, response) {
         WHERE is_active = true 
         ORDER BY id DESC
       `;
-      return response.status(200).json(products);
+      return res.status(200).json(products);
     }
 
-    // POST, PUT, DELETE methods included in full file
-    
-    return response.status(405).json({ error: 'Method not allowed' });
+    // POST, PUT, DELETE methods included...
     
   } catch (error) {
-    console.error('Database error:', error);
-    return response.status(500).json({ 
-      error: 'Database connection error',
-      message: error.message,
-      timestamp: new Date().toISOString()
+    console.error('Neon Database Error:', error);
+    return res.status(500).json({ 
+      error: 'Database connection failed',
+      message: error.message
     });
   }
 }
