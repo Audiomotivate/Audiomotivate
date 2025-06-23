@@ -46,29 +46,20 @@ export default function Home() {
   const [showCityPopup, setShowCityPopup] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Fetch all products for search with fresh data
-  const { data: audiobooks } = useQuery({
-    queryKey: ['/api/products/type/audiobook'],
-    staleTime: 0, // Force refresh
-  });
-  
-  const { data: videos } = useQuery({
-    queryKey: ['/api/products/type/video'],
-    staleTime: 0, // Force refresh
-  });
-  
-  const { data: guides } = useQuery({
-    queryKey: ['/api/products/type/guide'],
-    staleTime: 0, // Force refresh
-  });
-  
-  const { data: pdfs } = useQuery({
-    queryKey: ['/api/products/type/pdf'],
+  // Fetch all products and filter by type
+  const { data: allProducts = [] } = useQuery({
+    queryKey: ['/api/products'],
     staleTime: 0, // Force refresh
   });
 
+  // Filter products by type
+  const audiobooks = allProducts.filter((p: Product) => p.type === 'audiobook');
+  const videos = allProducts.filter((p: Product) => p.type === 'video');  
+  const guides = allProducts.filter((p: Product) => p.type === 'guide');
+  const pdfs = allProducts.filter((p: Product) => p.type === 'pdf');
+
   // Combine all products for search
-  const allProducts = useMemo(() => {
+  const combinedProducts = useMemo(() => {
     return [
       ...(audiobooks || []),
       ...(videos || []),
@@ -81,12 +72,12 @@ export default function Home() {
   const filteredProducts = useMemo(() => {
     if (!searchTerm.trim()) return [];
     
-    return allProducts.filter((product: Product) =>
+    return combinedProducts.filter((product: Product) =>
       product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.category.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [allProducts, searchTerm]);
+  }, [combinedProducts, searchTerm]);
 
   const handleSearch = (term: string) => {
     setSearchTerm(term);
