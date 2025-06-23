@@ -6,7 +6,23 @@
       "use": "@vercel/node"
     },
     {
-      "src": "api/admin/products/index.js",
+      "src": "api/admin/products.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/admin/analytics.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/admin/login.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/admin/logout.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/admin/auth.js",
       "use": "@vercel/node"
     },
     {
@@ -24,7 +40,27 @@
     },
     {
       "src": "/api/admin/products",
-      "dest": "/api/admin/products/index.js"
+      "dest": "/api/admin/products.js"
+    },
+    {
+      "src": "/api/admin/analytics",
+      "dest": "/api/admin/analytics.js"
+    },
+    {
+      "src": "/api/admin/login",
+      "dest": "/api/admin/login.js"
+    },
+    {
+      "src": "/api/admin/logout",
+      "dest": "/api/admin/logout.js"
+    },
+    {
+      "src": "/api/admin/auth",
+      "dest": "/api/admin/auth.js"
+    },
+    {
+      "src": "/admin$",
+      "dest": "/admin/index.html"
     },
     {
       "handle": "filesystem"
