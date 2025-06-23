@@ -9,9 +9,12 @@ import { ChevronRight, Clock, Star, Plus, ChevronLeft } from 'lucide-react';
 import { Link } from 'wouter';
 
 function VideosSection() {
-  const { data: videos, isLoading } = useQuery<Product[]>({
-    queryKey: ['/api/products/type/video'],
+  const { data: allProducts = [], isLoading } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+    staleTime: 0,
   });
+
+  const videos = allProducts.filter(product => product.type === 'video');
 
   return (
     <section id="videos" className="py-8 bg-white">
