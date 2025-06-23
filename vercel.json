@@ -1,20 +1,37 @@
-"builds": [
-  {
-    "src": "api/products/index.js",
-    "use": "@vercel/node"
-  },
-  {
-    "src": "api/admin/products/index.js", 
-    "use": "@vercel/node"
-  }
-],
-"routes": [
-  {
-    "src": "/api/products",
-    "dest": "/api/products/index.js"
-  },
-  {
-    "src": "/api/admin/products",
-    "dest": "/api/admin/products/index.js"
-  }
-]
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/products/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/admin/products/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/products",
+      "dest": "/api/products/index.js"
+    },
+    {
+      "src": "/api/admin/products",
+      "dest": "/api/admin/products/index.js"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
