@@ -5,6 +5,7 @@ import Header from '../components/header';
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('products');
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -18,11 +19,14 @@ export default function AdminPanel() {
     isActive: true
   });
 
-  const { data: products = [], isLoading, refetch } = useQuery({
+  const { data: products = [], isLoading, refetch, error } = useQuery({
     queryKey: ['/api/admin/products'],
     staleTime: 0,
     retry: 1
   });
+
+  // Debug logging
+  console.log('Admin Query State:', { products, isLoading, error, productsLength: products?.length });
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -30,10 +34,15 @@ export default function AdminPanel() {
         ...data,
         price: Math.round(parseFloat(data.price) * 100)
       };
-      return apiRequest('POST', '/api/admin/products', productData);
+      if (editingId) {
+        return apiRequest('PUT', `/api/admin/products?id=${editingId}`, productData);
+      } else {
+        return apiRequest('POST', '/api/admin/products', productData);
+      }
     },
     onSuccess: () => {
-     queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      refetch();
       setForm({
         title: '',
         description: '',
@@ -46,11 +55,37 @@ export default function AdminPanel() {
         badge: '',
         isActive: true
       });
+      setEditingId(null);
+      alert(editingId ? 'Producto actualizado exitosamente' : 'Producto creado exitosamente');
+    },
+    onError: (error) => {
+      console.error('Error saving product:', error);
+      alert('Error al guardar producto');
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('DELETE', `/api/admin/products?id=${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+      refetch();
+      alert('Producto eliminado exitosamente');
+    },
+    onError: (error) => {
+      console.error('Error deleting product:', error);
+      alert('Error al eliminar producto');
     }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.title || !form.description || !form.price) {
+      alert('Por favor completa todos los campos requeridos');
+      return;
+    }
+    console.log('Submitting form:', form);
     createMutation.mutate(form);
   };
 
@@ -65,7 +100,7 @@ export default function AdminPanel() {
             onClick={() => setActiveTab('products')}
             className={`px-4 py-2 rounded ${activeTab === 'products' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
           >
-            Productos ({products.length})
+            Productos ({products?.length || 0})
           </button>
           <button 
             onClick={() => setActiveTab('dashboard')}
@@ -78,7 +113,32 @@ export default function AdminPanel() {
         {activeTab === 'products' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold mb-4">Agregar Producto</h2>
+              <h2 className="text-xl font-bold mb-4">{editingId ? 'Editar Producto' : 'Agregar Producto'}</h2>
+              {editingId && (
+                <div className="mb-4 p-2 bg-yellow-100 text-yellow-800 rounded">
+                  Editando producto ID: {editingId}
+                  <button
+                    onClick={() => {
+                      setEditingId(null);
+                      setForm({
+                        title: '',
+                        description: '',
+                        type: 'audiobook',
+                        category: '',
+                        price: '',
+                        imageUrl: '',
+                        downloadUrl: '',
+                        duration: '',
+                        badge: '',
+                        isActive: true
+                      });
+                    }}
+                    className="ml-2 text-yellow-600 hover:text-yellow-800"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Título</label>
@@ -168,7 +228,7 @@ export default function AdminPanel() {
                   disabled={createMutation.isPending}
                   className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {createMutation.isPending ? 'Guardando...' : 'Guardar Producto'}
+                  {createMutation.isPending ? 'Guardando...' : (editingId ? 'Actualizar Producto' : 'Guardar Producto')}
                 </button>
               </form>
             </div>
@@ -177,16 +237,72 @@ export default function AdminPanel() {
               <h2 className="text-xl font-bold mb-4">Productos Existentes</h2>
               {isLoading ? (
                 <div className="text-center py-8">Cargando...</div>
-              ) : products.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No hay productos</div>
+              ) : error ? (
+                <div className="text-center py-8">
+                  <p className="text-red-500">Error: {error.message}</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : !products || products.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No hay productos</p>
+                  <button
+                    onClick={() => refetch()}
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                  >
+                    Recargar
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {products.map((product: any) => (
                     <div key={product.id} className="p-4 border rounded">
-                      <h3 className="font-semibold">{product.title}</h3>
-                      <p className="text-sm text-gray-600">{product.type} • {product.category}</p>
-                      <p className="text-sm font-medium">${(product.price / 100).toFixed(2)} MXN</p>
-                      {product.duration && <p className="text-xs text-gray-500">{product.duration}</p>}
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="font-semibold">{product.title}</h3>
+                          <p className="text-sm text-gray-600">{product.type} • {product.category}</p>
+                          <p className="text-sm font-medium">${(product.price / 100).toFixed(2)} MXN</p>
+                          {product.duration && <p className="text-xs text-gray-500">{product.duration}</p>}
+                          {product.badge && <span className="inline-block bg-yellow-500 text-black text-xs px-2 py-1 rounded mt-1">{product.badge}</span>}
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <button
+                            onClick={() => {
+                              setForm({
+                                title: product.title,
+                                description: product.description,
+                                type: product.type,
+                                category: product.category,
+                                price: (product.price / 100).toString(),
+                                imageUrl: product.imageUrl,
+                                downloadUrl: product.downloadUrl,
+                                duration: product.duration || '',
+                                badge: product.badge || '',
+                                isActive: product.isActive
+                              });
+                              setEditingId(product.id);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-sm"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('¿Seguro que quieres eliminar este producto?')) {
+                                deleteMutation.mutate(product.id);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
