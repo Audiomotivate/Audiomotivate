@@ -1,10 +1,13 @@
 const { neon } = require('@neondatabase/serverless');
 
 module.exports = async function handler(req, res) {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
   res.setHeader('Content-Type', 'application/json');
+  
+  console.log('API Products called - Method:', req.method, 'URL:', req.url);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -14,6 +17,7 @@ module.exports = async function handler(req, res) {
     const sql = neon('postgresql://neondb_owner:npg_qBXg9wN8MpOv@ep-sparkling-river-aazlr1de-pooler.westus3.azure.neon.tech/neondb?sslmode=require');
 
     if (req.method === 'GET') {
+      console.log('Fetching products from Neon database...');
       const products = await sql`
         SELECT 
           id, title, description, type, category, price, 
@@ -26,6 +30,7 @@ module.exports = async function handler(req, res) {
         WHERE is_active = true 
         ORDER BY id DESC
       `;
+      console.log('Products fetched:', products.length, 'items');
       return res.status(200).json(products);
     }
     
