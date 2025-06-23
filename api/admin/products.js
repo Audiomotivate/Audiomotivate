@@ -1,9 +1,9 @@
-import { neon } from '@neondatabase/serverless';
+const { neon } = require('@neondatabase/serverless');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
@@ -23,18 +23,29 @@ export default async function handler(req, res) {
           is_new as "isNew", is_active as "isActive",
           created_at as "createdAt", updated_at as "updatedAt"
         FROM products 
-        WHERE is_active = true 
-        ORDER BY id DESC
+        ORDER BY created_at DESC
       `;
       return res.status(200).json(products);
     }
 
-    // POST, PUT, DELETE methods included...
+    if (req.method === 'POST') {
+      const { title, description, type, category, price, imageUrl, downloadUrl, previewUrl, duration, badge, isActive = true } = req.body;
+      
+      const [product] = await sql`
+        INSERT INTO products (title, description, type, category, price, image_url, download_url, preview_url, duration, badge, is_active)
+        VALUES (${title}, ${description}, ${type}, ${category}, ${price}, ${imageUrl}, ${downloadUrl}, ${previewUrl}, ${duration}, ${badge}, ${isActive})
+        RETURNING *
+      `;
+      
+      return res.status(201).json(product);
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
     
   } catch (error) {
-    console.error('Neon Database Error:', error);
+    console.error('Admin API Error:', error);
     return res.status(500).json({ 
-      error: 'Database connection failed',
+      error: 'Database operation failed',
       message: error.message
     });
   }
