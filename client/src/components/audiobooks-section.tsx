@@ -12,9 +12,12 @@ function AudiobooksSection() {
     staleTime: 0,
   });
 
-  console.log('Audiobooks Section - Products:', allProducts, 'Loading:', isLoading, 'Error:', error);
-
   const products = allProducts.filter(product => product.type === 'audiobook');
+  
+  // Debug logging
+  if (products.length > 0) {
+    console.log('Audiobooks found:', products.length, products);
+  }
 
   return (
     <section id="audiolibros" className="py-8 bg-gray-50">
@@ -40,13 +43,6 @@ function AudiobooksSection() {
                 </div>
               </div>
             ))}
-          </div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg mb-6">Próximamente nuevos audiolibros</p>
-            <Button asChild>
-              <Link href="/contact">Contáctanos para sugerencias</Link>
-            </Button>
           </div>
         ) : (
           <div className="relative mb-12">
@@ -87,34 +83,38 @@ function AudiobooksSection() {
                         alt={book.title} 
                         className="w-full h-48 md:h-64 rounded-lg object-contain bg-gray-50 shadow-lg"
                       />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg" />
                       {book.badge && (
-                        <Badge className="absolute top-2 left-2 bg-primary text-white">
+                        <Badge className="absolute top-2 right-2 bg-yellow-500 text-black text-xs px-2 py-1 font-bold shadow-lg">
                           {book.badge}
                         </Badge>
                       )}
                     </div>
-                    
-                    {/* Información del producto */}
-                    <div className="space-y-2">
-                      <h3 className="font-semibold text-sm md:text-base text-gray-800 line-clamp-2 leading-tight">
+
+                    {/* Contenido debajo de la imagen - SOLO título, autor, rating y duración */}
+                    <div className="px-1">
+                      <h3 className="font-bold text-gray-800 mb-1 line-clamp-2 text-sm md:text-base group-hover:text-primary transition-colors leading-tight">
                         {book.title}
                       </h3>
+                      <p className="text-xs md:text-sm text-gray-400 mb-2 line-clamp-1">
+                        De: {book.category}
+                      </p>
                       
-                      <div className="flex items-center text-xs md:text-sm text-gray-600">
-                        <Clock className="h-3 w-3 md:h-4 md:w-4 mr-1" />
-                        <span>{book.duration}</span>
+                      {/* Rating */}
+                      <div className="flex items-center gap-1 mb-2">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star 
+                            key={i}
+                            className={`h-3 w-3 md:h-4 md:w-4 ${i < 4 ? 'text-yellow-500 fill-current' : 'text-gray-400'}`}
+                          />
+                        ))}
+                        <span className="text-xs md:text-sm text-gray-400 ml-1">4.9</span>
                       </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-lg md:text-xl text-primary">
-                          ${(book.price / 100).toFixed(2)} MXN
-                        </span>
-                        {book.isBestseller && (
-                          <div className="flex items-center text-yellow-500">
-                            <Star className="h-3 w-3 md:h-4 md:w-4 fill-current" />
-                            <span className="text-xs ml-1">Bestseller</span>
-                          </div>
-                        )}
+
+                      {/* Duración */}
+                      <div className="flex items-center text-gray-500 text-xs md:text-sm">
+                        <Clock className="mr-1 h-3 w-3 md:h-4 md:w-4" />
+                        {book.duration || '49:30'}
                       </div>
                     </div>
                   </div>
@@ -123,14 +123,17 @@ function AudiobooksSection() {
             </div>
           </div>
         )}
-
+        
         <div className="text-center">
-          <Button asChild variant="outline" size="lg">
-            <Link href="/audiobooks">
+          <Link href="/audiolibros">
+            <Button 
+              variant="link" 
+              className="text-primary font-bold text-lg hover:underline flex items-center justify-center mx-auto whitespace-normal max-w-none"
+            >
               Ver todos los audiolibros
-              <ChevronRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
+              <ChevronRight className="ml-1 h-4 w-4 flex-shrink-0" />
+            </Button>
+          </Link>
         </div>
       </div>
     </section>
