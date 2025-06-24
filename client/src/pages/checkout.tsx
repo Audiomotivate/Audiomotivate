@@ -6,8 +6,9 @@ import { CartItemWithProduct } from '@shared/schema';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
-import { ShoppingBag, CreditCard, User, Mail, Shield, CheckCircle, Star, AlertCircle } from 'lucide-react';
+import { ShoppingBag, CreditCard, User, Mail, Shield, CheckCircle, Star, Download, Clock, Smartphone } from 'lucide-react';
 import { Link } from 'wouter';
+import TestimonialsCarousel from '../components/testimonials-carousel';
 import Header from '../components/header';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY!);
@@ -35,7 +36,6 @@ function CheckoutForm({ total }: { total: number }) {
     event.preventDefault();
 
     if (!stripe || !elements) {
-      setMessage('Sistema de pago no disponible. Por favor recarga la página.');
       return;
     }
 
@@ -45,30 +45,22 @@ function CheckoutForm({ total }: { total: number }) {
     }
 
     setIsProcessing(true);
-    setMessage('');
 
-    try {
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
-          payment_method_data: {
-            billing_details: {
-              email: customerInfo.email,
-              name: `${customerInfo.firstName} ${customerInfo.lastName}`,
-            },
-          }
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
+        payment_method_data: {
+          billing_details: {
+            email: customerInfo.email,
+            name: `${customerInfo.firstName} ${customerInfo.lastName}`,
+          },
         }
-      });
-
-      if (error) {
-        console.error('Stripe error:', error);
-        setMessage(`Error: ${error.message}`);
-        setIsProcessing(false);
       }
-    } catch (err) {
-      console.error('Payment confirmation error:', err);
-      setMessage('Error inesperado. Por favor intenta nuevamente.');
+    });
+
+    if (error) {
+      setMessage(`Error: ${error.message}`);
       setIsProcessing(false);
     }
   };
@@ -138,31 +130,15 @@ function CheckoutForm({ total }: { total: number }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 border border-gray-300 rounded-lg bg-white">
-            <PaymentElement 
-              options={{
-                layout: "tabs",
-                fields: {
-                  billingDetails: {
-                    address: {
-                      country: 'never'
-                    }
-                  }
-                }
-              }}
-            />
+            <PaymentElement />
           </div>
           
           {message && (
-            <div className={`p-4 rounded-lg text-sm font-medium flex items-center ${
+            <div className={`p-4 rounded-lg text-sm font-medium ${
               message.includes('exitoso') 
                 ? 'bg-green-100 text-green-800 border border-green-200' 
                 : 'bg-red-100 text-red-800 border border-red-200'
             }`}>
-              {message.includes('exitoso') ? (
-                <CheckCircle className="h-4 w-4 mr-2 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
-              )}
               {message}
             </div>
           )}
@@ -192,17 +168,6 @@ function CheckoutForm({ total }: { total: number }) {
               </div>
             )}
           </Button>
-
-          <div className="text-center space-y-2">
-            <div className="flex items-center justify-center text-xs text-gray-500">
-              <Shield className="h-3 w-3 mr-1" />
-              <span>Pago 100% seguro procesado por Stripe</span>
-            </div>
-            <div className="flex items-center justify-center text-xs text-gray-500">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              <span>Entrega instantánea por email</span>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </form>
@@ -214,9 +179,11 @@ export default function Checkout() {
     queryKey: ['/api/cart'],
   });
 
+  const { data: testimonials } = useQuery({
+    queryKey: ['/api/testimonials'],
+  });
+
   const [clientSecret, setClientSecret] = useState('');
-  const [paymentError, setPaymentError] = useState('');
-  const [isLoadingPayment, setIsLoadingPayment] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -227,44 +194,36 @@ export default function Checkout() {
   const total = subtotal;
 
   useEffect(() => {
-    if (total > 0 && !clientSecret && !isLoadingPayment) {
-      setIsLoadingPayment(true);
-      setPaymentError('');
-      
+    if (total > 0) {
+      console.log('Creating payment intent for total:', total);
       fetch('/api/checkout', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           amount: total,
           currency: 'mxn'
         }),
       })
-      .then(async response => {
+      .then(response => {
+        console.log('Checkout response status:', response.status);
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Error ${response.status}: ${errorText}`);
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         return response.json();
       })
       .then(data => {
+        console.log('Payment intent created:', data);
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
         } else {
-          throw new Error('No se recibió clientSecret del servidor');
+          console.error('No clientSecret in response:', data);
         }
       })
       .catch(error => {
         console.error('Error creating payment intent:', error);
-        setPaymentError('Error al inicializar el pago. Por favor recarga la página.');
-      })
-      .finally(() => {
-        setIsLoadingPayment(false);
       });
     }
-  }, [total, clientSecret, isLoadingPayment]);
+  }, [total]);
 
   if (cartItems.length === 0) {
     return (
@@ -354,28 +313,85 @@ export default function Checkout() {
               </Card>
             </div>
 
-            <div>
-              {paymentError ? (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                  <p className="text-red-600 mb-4">{paymentError}</p>
-                  <Button 
-                    onClick={() => window.location.reload()} 
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    Reintentar
-                  </Button>
-                </div>
-              ) : clientSecret ? (
+            <div className="space-y-6">
+              {clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
                   <CheckoutForm total={total} />
                 </Elements>
               ) : (
                 <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Preparando el pago...</p>
-                  <p className="text-sm text-gray-500 mt-2">Conectando con el procesador de pagos</p>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Preparando el pago...</p>
                 </div>
+              )}
+              
+              {/* What You Get Section */}
+              <Card className="shadow-lg border-0">
+                <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-t-lg">
+                  <CardTitle className="flex items-center space-x-2">
+                    <Download className="h-5 w-5" />
+                    <span>Lo que obtienes</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-green-100 rounded-full">
+                        <Download className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Acceso instantáneo</h4>
+                        <p className="text-sm text-gray-600">Descarga inmediata después del pago</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-blue-100 rounded-full">
+                        <Smartphone className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Compatible con todos los dispositivos</h4>
+                        <p className="text-sm text-gray-600">Escucha en móvil, tablet o computadora</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-purple-100 rounded-full">
+                        <Clock className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Acceso de por vida</h4>
+                        <p className="text-sm text-gray-600">Sin límites de tiempo ni restricciones</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-yellow-100 rounded-full">
+                        <Star className="h-4 w-4 text-yellow-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Contenido premium</h4>
+                        <p className="text-sm text-gray-600">Material exclusivo de alta calidad</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg border border-green-200">
+                    <p className="text-sm text-center text-gray-700">
+                      <CheckCircle className="h-4 w-4 inline text-green-600 mr-1" />
+                      <strong>Garantía de satisfacción:</strong> Si no estás completamente satisfecho, te devolvemos tu dinero.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Testimonials Section */}
+              {testimonials && testimonials.length > 0 && (
+                <Card className="shadow-lg border-0">
+                  <CardContent className="p-6">
+                    <TestimonialsCarousel testimonials={testimonials} />
+                  </CardContent>
+                </Card>
               )}
             </div>
           </div>
