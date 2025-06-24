@@ -1,151 +1,130 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'wouter';
+import { useLocation } from 'wouter';
+import { CheckCircle, Mail, Download, Home, Shield } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-import { CheckCircle, Download, Mail, Home, Star } from 'lucide-react';
 import Header from '../components/header';
-import { queryClient } from '../lib/queryClient';
 
 export default function OrderSuccess() {
+  const [location] = useLocation();
+  const [customerEmail, setCustomerEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
-  const [, setLocation] = useLocation();
-
-  // Immediate setup when component mounts
+  
   useEffect(() => {
-    // Get customer name from URL parameters immediately
-    const urlParams = new URLSearchParams(window.location.search);
-    const name = urlParams.get('name');
-    if (name) {
-      setCustomerName(decodeURIComponent(name));
-    }
+    window.scrollTo(0, 0);
     
-    // Clear cart immediately when reaching success page
-    const clearCartAndRefresh = async () => {
-      try {
-        await fetch('/api/cart/clear', { method: 'DELETE' });
-        queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
-      } catch (e) {
-        console.log('Cart already cleared');
-      }
-    };
+    // Clear cart after successful purchase
+    fetch('/api/cart', { method: 'DELETE' }).catch(console.error);
     
-    clearCartAndRefresh();
+    // Extract customer info from URL
+    const urlParams = new URLSearchParams(location.split('?')[1] || '');
+    const name = urlParams.get('name') || 'Estimado Cliente';
+    const email = urlParams.get('email') || '';
     
-    // Smooth scroll to top for better experience
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 100);
-  }, []);
+    setCustomerName(name);
+    setCustomerEmail(email);
+  }, [location]);
 
   return (
     <>
       <Header showMobileFixedSearch={false} />
-      <main className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 pt-16 pb-12">
+      <main className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 pt-24 pb-12">
         <div className="max-w-4xl mx-auto px-4">
-        {/* Success Header */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center mb-3">
-            <div className="bg-green-100 p-4 rounded-full">
-              <CheckCircle className="h-16 w-16 text-green-600" />
+          {/* Success Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+              <CheckCircle className="h-12 w-12 text-green-600" />
             </div>
-          </div>
-          
-          <div className="flex items-center justify-center mb-3">
-            <Star className="h-5 w-5 text-yellow-500 mr-2" />
-            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               ¡Muchas gracias por tu compra {customerName}!
             </h1>
-            <Star className="h-5 w-5 text-yellow-500 ml-2" />
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Tu inversión en desarrollo personal ha sido procesada exitosamente
+            </p>
           </div>
-          
-          <p className="text-lg text-gray-700 max-w-2xl mx-auto">
-            Tu inversión en desarrollo personal ha sido procesada exitosamente
-          </p>
-        </div>
 
-        {/* Success Details */}
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
-          <Card className="shadow-lg border-0">
-            <CardContent className="p-6">
-              <div className="flex items-center mb-4">
-                <Mail className="h-6 w-6 text-blue-600 mr-3" />
-                <h3 className="text-lg font-semibold text-gray-900">Acceso Inmediato</h3>
+          {/* Email Confirmation Card */}
+          <Card className="shadow-lg border-0 mb-8">
+            <CardContent className="p-8">
+              <div className="flex items-center space-x-4 mb-6">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <Mail className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Email de Descarga Enviado
+                  </h3>
+                  <p className="text-gray-600">Los enlaces han sido enviados a tu correo</p>
+                </div>
               </div>
-              <p className="text-gray-700 mb-4">
-                Hemos enviado los enlaces de descarga a tu correo electrónico. 
-                Revisa tu bandeja de entrada y también la carpeta de spam.
+
+              <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-green-800 font-medium mb-2">
+                      ✅ Email enviado exitosamente a:
+                    </p>
+                    <p className="text-green-700 font-mono bg-white px-4 py-2 rounded border text-lg">
+                      📧 {customerEmail}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-4 bg-white rounded border border-green-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">El email incluye:</h4>
+                  <ul className="text-sm text-gray-700 space-y-1">
+                    <li>• Enlaces directos de descarga de Google Drive</li>
+                    <li>• Mensaje de agradecimiento por tu compra</li>
+                    <li>• Instrucciones para acceder a tu contenido</li>
+                    <li>• Válido por 30 días</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-center space-x-2 text-yellow-600">
+                <Shield className="h-4 w-4" />
+                <p className="text-sm">
+                  Si no encuentras el email, revisa tu carpeta de spam
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Motivational Quote */}
+          <div className="text-center mb-8">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-2xl shadow-lg">
+              <h2 className="text-2xl md:text-3xl font-bold mb-4">
+                "La Inversión En Ti Mismo Es Sin duda, La Mejor Inversión."
+              </h2>
+              <p className="text-blue-100 text-lg">
+                Has dado el primer paso hacia tu transformación personal. ¡Felicidades!
               </p>
+            </div>
+          </div>
 
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg border-0">
-            <CardContent className="p-6 pt-[1px] pb-[1px]">
-              <div className="flex items-center mb-4">
-                <CheckCircle className="h-6 w-6 text-green-600 mr-3" />
-                <h3 className="text-lg font-semibold text-gray-900">Próximos Pasos</h3>
-              </div>
-              <ul className="space-y-3 text-gray-700">
-                <li className="flex items-start">
-                  <span className="bg-green-100 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-sm font-medium mr-3 mt-0.5">1</span>
-                  Revisa tu email para los enlaces de descarga
-                </li>
-                <li className="flex items-start">
-                  <span className="bg-green-100 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-sm font-medium mr-3 mt-0.5">2</span>
-                  Descarga tu contenido digital
-                </li>
-                <li className="flex items-start">
-                  <span className="bg-green-100 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-sm font-medium mr-3 mt-0.5">3</span>
-                  ¡Comienza tu transformación personal!
-                </li>
-                <li className="flex items-start">
-                  <span className="bg-green-100 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-sm font-medium mr-3 mt-0.5">4</span>
-                  Los enlaces estarán disponibles por 30 días
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Motivational Message */}
-        <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white mb-8 shadow-xl border-0">
-          <CardContent className="p-8 text-center">
-
-            <p className="text-lg font-medium pt-[-14px] pb-[-14px] ml-[-25px] mr-[-25px] pl-[-10px] pr-[-10px] mt-[-13px] mb-[-13px]">"La Inversión En Ti Mismo Es Sin duda, La Mejor Inversión."</p>
-          </CardContent>
-        </Card>
-
-        {/* Action Buttons */}
-        <div className="flex justify-center">
-          <Button 
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 text-lg"
-            size="lg"
-            onClick={() => {
-              setLocation('/');
-              setTimeout(() => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }, 100);
-            }}
-          >
-            <Home className="h-5 w-5 mr-2" />
-            Volver al Inicio
-          </Button>
-        </div>
-
-        {/* Footer Note */}
-        <div className="text-center mt-8">
-          <p className="text-sm text-gray-600">
-            ¿No recibiste el email? Revisa tu carpeta de spam o 
-            <button 
-              className="text-blue-600 hover:text-blue-800 underline ml-1"
-              onClick={() => window.open('mailto:soporte@audiomotivate.com', '_blank')}
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button 
+              onClick={() => window.location.href = '/'}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+              size="lg"
             >
-              contáctanos para ayudarte
-            </button>
-          </p>
+              <Home className="h-5 w-5 mr-2" />
+              Volver al Inicio
+            </Button>
+            
+            <Button 
+              onClick={() => window.location.href = '/contacto'}
+              variant="outline"
+              className="border-2 border-blue-600 text-blue-600 hover:bg-blue-50 px-8 py-3 text-lg"
+              size="lg"
+            >
+              <Mail className="h-5 w-5 mr-2" />
+              Contacto y Soporte
+            </Button>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
     </>
   );
 }
