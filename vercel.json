@@ -26,6 +26,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "admin/index.html",
+      "use": "@vercel/static"
+    },
+    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -60,6 +64,10 @@
     },
     {
       "src": "/admin$",
+      "dest": "/admin/index.html"
+    },
+    {
+      "src": "/admin/",
       "dest": "/admin/index.html"
     },
     {
