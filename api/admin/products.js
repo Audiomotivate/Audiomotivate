@@ -2,7 +2,6 @@ const { Pool } = require('@neondatabase/serverless');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// Simple authentication check for Vercel serverless
 function checkAuth(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return false;
@@ -12,22 +11,22 @@ function checkAuth(req) {
 }
 
 module.exports = async (req, res) => {
-  // CORS headers for admin panel
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Check authentication
   if (!checkAuth(req)) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  if (req.method === 'GET') {
-    try {
+  console.log(`${req.method} /api/admin/products`);
+
+  try {
+    if (req.method === 'GET') {
       const result = await pool.query(`
         SELECT 
           id,
@@ -48,13 +47,10 @@ module.exports = async (req, res) => {
         ORDER BY id DESC
       `);
       
-      res.json(result.rows);
-    } catch (error) {
-      console.error('Database error:', error);
-      res.status(500).json({ error: 'Error fetching products' });
-    }
-  } else if (req.method === 'POST') {
-    try {
+      console.log(`Found ${result.rows.length} products`);
+      return res.json(result.rows);
+      
+    } else if (req.method === 'POST') {
       const { title, description, type, category, price, imageUrl, duration, badge, downloadUrl, previewUrl, isActive = true } = req.body;
       
       const result = await pool.query(`
@@ -63,13 +59,10 @@ module.exports = async (req, res) => {
         RETURNING id, title, description, type, category, price, image_url as "imageUrl", duration, badge, download_url as "downloadUrl", preview_url as "previewUrl", is_active as "isActive"
       `, [title, description, type, category, price, imageUrl, duration, badge, downloadUrl, previewUrl, isActive]);
       
-      res.json(result.rows[0]);
-    } catch (error) {
-      console.error('Database error:', error);
-      res.status(500).json({ error: 'Error creating product' });
-    }
-  } else if (req.method === 'PUT') {
-    try {
+      console.log('Product created:', result.rows[0]);
+      return res.json(result.rows[0]);
+      
+    } else if (req.method === 'PUT') {
       const { id, title, description, type, category, price, imageUrl, duration, badge, downloadUrl, previewUrl, isActive } = req.body;
       
       const result = await pool.query(`
@@ -81,23 +74,38 @@ module.exports = async (req, res) => {
         RETURNING id, title, description, type, category, price, image_url as "imageUrl", duration, badge, download_url as "downloadUrl", preview_url as "previewUrl", is_active as "isActive"
       `, [title, description, type, category, price, imageUrl, duration, badge, downloadUrl, previewUrl, isActive, id]);
       
-      res.json(result.rows[0]);
-    } catch (error) {
-      console.error('Database error:', error);
-      res.status(500).json({ error: 'Error updating product' });
-    }
-  } else if (req.method === 'DELETE') {
-    try {
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
+      console.log('Product updated:', result.rows[0]);
+      return res.json(result.rows[0]);
+      
+    } else if (req.method === 'DELETE') {
       const { id } = req.query;
       
-      await pool.query('DELETE FROM products WHERE id = $1', [id]);
+      if (!id) {
+        return res.status(400).json({ error: 'Product ID required' });
+      }
       
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Database error:', error);
-      res.status(500).json({ error: 'Error deleting product' });
+      const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
+      console.log('Product deleted:', id);
+      return res.json({ success: true, id });
+      
+    } else {
+      return res.status(405).json({ error: 'Method not allowed' });
     }
-  } else {
-    res.status(405).json({ error: 'Method not allowed' });
+    
+  } catch (error) {
+    console.error('Database error:', error);
+    return res.status(500).json({ 
+      error: 'Database operation failed',
+      details: error.message 
+    });
   }
 };
