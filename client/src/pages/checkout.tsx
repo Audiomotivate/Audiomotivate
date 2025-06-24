@@ -170,66 +170,6 @@ function CheckoutForm({ total }: { total: number }) {
           </Button>
         </CardContent>
       </Card>
-
-      {/* What You Get Section */}
-      <Card className="shadow-lg border-0">
-        <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-t-lg">
-          <CardTitle className="flex items-center space-x-2">
-            <Download className="h-5 w-5" />
-            <span>Lo que obtienes</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-5 space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-start space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-semibold text-gray-900">Descarga instantánea</h4>
-                <p className="text-sm text-gray-600">Recibe inmediatamente el enlace de descarga por email</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-semibold text-gray-900">Audio de alta calidad</h4>
-                <p className="text-sm text-gray-600">Formato MP3 de alta resolución para la mejor experiencia</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-semibold text-gray-900">Compatible con todos los dispositivos</h4>
-                <p className="text-sm text-gray-600">Escucha en tu móvil, tablet, computadora o reproductor de audio</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-semibold text-gray-900">Acceso de por vida</h4>
-                <p className="text-sm text-gray-600">Descarga y conserva tu contenido para siempre</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-semibold text-gray-900">Sin anuncios ni interrupciones</h4>
-                <p className="text-sm text-gray-600">Disfruta de una experiencia premium sin publicidad</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg border border-blue-200 mt-4">
-            <p className="text-sm text-center text-gray-700">
-              <Shield className="h-4 w-4 inline text-blue-600 mr-1" />
-              <strong>Compra 100% segura</strong> • Garantía de satisfacción o tu dinero de vuelta
-            </p>
-          </div>
-        </CardContent>
-      </Card>
     </form>
   );
 }
@@ -400,8 +340,78 @@ export default function Checkout() {
               )}
             </div>
           </div>
+
+          {/* También te pueden interesar section */}
+          <div className="mt-16">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">También te pueden interesar</h2>
+              <p className="text-gray-600">Descubre más contenido que te ayudará en tu crecimiento personal</p>
+            </div>
+            <SuggestedProducts currentCartItems={cartItems} />
+          </div>
         </div>
       </main>
     </>
+  );
+}
+
+function SuggestedProducts({ currentCartItems }: { currentCartItems: CartItemWithProduct[] }) {
+  const { data: allProducts } = useQuery({
+    queryKey: ['/api/products'],
+  });
+
+  if (!allProducts || allProducts.length === 0) {
+    return null;
+  }
+
+  // Get current cart product IDs to exclude them from suggestions
+  const cartProductIds = currentCartItems.map(item => item.product.id);
+  
+  // Filter out products already in cart and get up to 6 suggestions
+  const suggestedProducts = allProducts
+    .filter((product: any) => !cartProductIds.includes(product.id) && product.isActive)
+    .slice(0, 6);
+
+  if (suggestedProducts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {suggestedProducts.map((product: any) => (
+        <Card key={product.id} className="group hover:shadow-lg transition-shadow duration-300">
+          <CardContent className="p-4">
+            <div className="aspect-[3/4] mb-4 overflow-hidden rounded-lg bg-gray-100">
+              <img 
+                src={product.imageUrl} 
+                alt={product.title}
+                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+              />
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-semibold text-gray-900 line-clamp-2 text-sm">{product.title}</h3>
+              <p className="text-xs text-gray-600 capitalize">
+                {product.type === 'audiobook' ? 'Audiolibro' : 
+                 product.type === 'audio' ? 'Audio' : 
+                 product.type === 'guide' ? 'Guía' : 'Script'}
+              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-bold text-blue-600">{formatCurrency(product.price)}</span>
+                <Button 
+                  size="sm" 
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1"
+                  onClick={() => {
+                    // Add to cart logic would go here
+                    window.location.href = `/products/${product.id}`;
+                  }}
+                >
+                  Ver detalles
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }
