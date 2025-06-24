@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
 import { ShoppingBag, CreditCard, User, Mail, Shield, CheckCircle, Star } from 'lucide-react';
-import { Link, useLocation } from 'wouter';
+import { Link } from 'wouter';
 import Header from '../components/header';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY!);
@@ -23,7 +23,6 @@ interface CartResponse {
 function CheckoutForm({ total }: { total: number }) {
   const stripe = useStripe();
   const elements = useElements();
-  const [, setLocation] = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
   const [customerInfo, setCustomerInfo] = useState({
@@ -46,36 +45,29 @@ function CheckoutForm({ total }: { total: number }) {
 
     setIsProcessing(true);
 
-    try {
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
-          payment_method_data: {
-            billing_details: {
-              email: customerInfo.email,
-              name: `${customerInfo.firstName} ${customerInfo.lastName}`,
-            },
-          }
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
+        payment_method_data: {
+          billing_details: {
+            email: customerInfo.email,
+            name: `${customerInfo.firstName} ${customerInfo.lastName}`,
+          },
         }
-      });
-
-      if (error) {
-        setMessage(`Error: ${error.message}`);
-        setIsProcessing(false);
       }
-    } catch (err) {
-      console.error('Error en checkout:', err);
-      setMessage('Error inesperado. Por favor intenta nuevamente.');
+    });
+
+    if (error) {
+      setMessage(`Error: ${error.message}`);
       setIsProcessing(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Customer Information */}
       <Card>
-        <CardHeader className="pt-[23px] pb-[23px] mt-[-6px] mb-[-6px] ml-[0px] mr-[0px] flex flex-col space-y-1.5 p-6">
+        <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <User className="h-5 w-5 text-blue-600" />
             <span>Información Personal</span>
@@ -124,17 +116,10 @@ function CheckoutForm({ total }: { total: number }) {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               placeholder="tu@email.com"
             />
-            <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-700 font-medium flex items-center">
-                <Mail className="h-4 w-4 mr-2" />
-                Recibirás instantáneamente en este correo el enlace de descarga para acceder a tu contenido digital adquirido
-              </p>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Payment Information */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
@@ -143,53 +128,20 @@ function CheckoutForm({ total }: { total: number }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <CreditCard className="h-4 w-4 inline mr-1" />
-              Información de la tarjeta
-            </label>
-            <div className="space-y-3">
-              <div className="p-4 border border-gray-300 rounded-lg bg-white shadow-sm">
-                <PaymentElement 
-                  options={{
-                    layout: "tabs"
-                  }}
-                />
-              </div>
-              
-              <div className="text-xs text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <div className="flex items-center mb-2">
-                  <CreditCard className="h-3 w-3 mr-1" />
-                  <span className="font-medium">Campos incluidos:</span>
-                </div>
-                <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>Número de tarjeta (16 dígitos)</li>
-                  <li>Fecha de expiración (MM/AA)</li>
-                  <li>Código de seguridad (CVC)</li>
-                </ul>
-              </div>
-              
-              <div className="p-2 bg-green-50 rounded-lg border border-green-200">
-                <p className="text-xs text-green-700 flex items-center">
-                  <Shield className="h-3 w-3 mr-1" />
-                  Tu información está protegida con encriptación de nivel bancario
-                </p>
-              </div>
-            </div>
+          <div className="p-4 border border-gray-300 rounded-lg bg-white">
+            <PaymentElement />
           </div>
-
+          
           {message && (
             <div className={`p-4 rounded-lg text-sm font-medium ${
               message.includes('exitoso') 
                 ? 'bg-green-100 text-green-800 border border-green-200' 
                 : 'bg-red-100 text-red-800 border border-red-200'
             }`}>
-              {message.includes('exitoso') && <CheckCircle className="h-4 w-4 inline mr-2" />}
               {message}
             </div>
           )}
 
-          {/* Order Total */}
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-lg border border-blue-200">
             <div className="text-center">
               <p className="text-sm text-gray-600 mb-2">Total a pagar</p>
@@ -200,7 +152,7 @@ function CheckoutForm({ total }: { total: number }) {
           <Button
             type="submit"
             disabled={!stripe || isProcessing || !customerInfo.email}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg transition-all duration-200"
             size="lg"
           >
             {isProcessing ? (
@@ -215,17 +167,6 @@ function CheckoutForm({ total }: { total: number }) {
               </div>
             )}
           </Button>
-
-          <div className="text-center space-y-2">
-            <div className="flex items-center justify-center text-xs text-gray-500">
-              <Shield className="h-3 w-3 mr-1" />
-              <span>Pago 100% seguro procesado por Stripe</span>
-            </div>
-            <div className="flex items-center justify-center text-xs text-gray-500">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              <span>Entrega instantánea por email</span>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </form>
@@ -239,7 +180,6 @@ export default function Checkout() {
 
   const [clientSecret, setClientSecret] = useState('');
 
-  // Scroll to top when component mounts
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -248,7 +188,6 @@ export default function Checkout() {
   const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const total = subtotal;
 
-  // Create payment intent when cart is loaded
   useEffect(() => {
     if (total > 0) {
       fetch('/api/checkout', {
@@ -295,84 +234,81 @@ export default function Checkout() {
     <>
       <Header showMobileFixedSearch={false} />
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* Header */}
-        <div className="text-center mb-4">
-          <div className="flex items-center justify-center mb-3">
-            <Star className="h-5 w-5 text-yellow-500 mr-2" />
-            <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              La Inversión en tí es sin duda, la Mejor Inversión.
-            </h1>
-            <Star className="h-5 w-5 text-yellow-500 ml-2" />
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-4">
+            <div className="flex items-center justify-center mb-3">
+              <Star className="h-5 w-5 text-yellow-500 mr-2" />
+              <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                La Inversión en tí es sin duda, la Mejor Inversión.
+              </h1>
+              <Star className="h-5 w-5 text-yellow-500 ml-2" />
+            </div>
+            <p className="text-base text-gray-700 max-w-2xl mx-auto">
+              Completa tu compra y recibe instantáneamente el contenido que te ayudará a alcanzar tus metas
+            </p>
           </div>
-          <p className="text-base text-gray-700 max-w-2xl mx-auto">
-            Completa tu compra y recibe instantáneamente el contenido que te ayudará a alcanzar tus metas
-          </p>
-        </div>
 
-        <div className="grid lg:grid-cols-2 gap-12">
-          {/* Left Column - Order Summary */}
-          <div className="space-y-6">
-            <Card className="shadow-xl border-0">
-              <CardHeader className="ml-[0px] mr-[0px] flex flex-col space-y-1.5 p-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg mt-[-7px] mb-[-7px] pt-[9px] pb-[9px]">
-                <CardTitle className="flex items-center space-x-2 text-[21px]">
-                  <ShoppingBag className="h-5 w-5" />
-                  <span>Resumen del Pedido</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-5 space-y-3">
-                {cartItems.map((item) => (
-                  <div key={item.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <img 
-                      src={item.product.imageUrl} 
-                      alt={item.product.title}
-                      className="w-16 h-20 object-contain bg-gray-50 rounded-lg shadow-md"
-                    />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 mb-1 text-sm">{item.product.title}</h3>
-                      <p className="text-xs text-gray-600 capitalize mb-1">
-                        {item.product.type}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Cantidad: {item.quantity}
-                      </p>
+          <div className="grid lg:grid-cols-2 gap-12">
+            <div className="space-y-6">
+              <Card className="shadow-xl border-0">
+                <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
+                  <CardTitle className="flex items-center space-x-2">
+                    <ShoppingBag className="h-5 w-5" />
+                    <span>Resumen del Pedido</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 space-y-3">
+                  {cartItems.map((item) => (
+                    <div key={item.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <img 
+                        src={item.product.imageUrl} 
+                        alt={item.product.title}
+                        className="w-16 h-20 object-contain bg-gray-50 rounded-lg shadow-md"
+                      />
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 mb-1 text-sm">{item.product.title}</h3>
+                        <p className="text-xs text-gray-600 capitalize mb-1">
+                          {item.product.type}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Cantidad: {item.quantity}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-blue-600">{formatCurrency(item.product.price)}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-blue-600">{formatCurrency(item.product.price)}</p>
-                    </div>
-                  </div>
-                ))}
-                
-                <div className="border-t pt-3 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(subtotal)}</span>
-                  </div>
+                  ))}
                   
-                  <div className="flex justify-between text-lg font-bold text-blue-600">
-                    <span>Total:</span>
-                    <span>{formatCurrency(total)}</span>
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Subtotal:</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
+                    
+                    <div className="flex justify-between text-lg font-bold text-blue-600">
+                      <span>Total:</span>
+                      <span>{formatCurrency(total)}</span>
+                    </div>
+                    <p className="text-xs text-gray-500">* Precios en pesos mexicanos (MXN)</p>
                   </div>
-                  <p className="text-xs text-gray-500">* Precios en pesos mexicanos (MXN)</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Right Column - Checkout Form */}
-          <div>
-            {clientSecret ? (
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <CheckoutForm total={total} />
-              </Elements>
-            ) : (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Preparando el pago...</p>
-              </div>
-            )}
+            <div>
+              {clientSecret ? (
+                <Elements stripe={stripePromise} options={{ clientSecret }}>
+                  <CheckoutForm total={total} />
+                </Elements>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Preparando el pago...</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         </div>
       </main>
     </>
