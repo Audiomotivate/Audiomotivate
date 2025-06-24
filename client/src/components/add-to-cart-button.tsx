@@ -1,14 +1,4 @@
-import { useState } from 'react';
-import { Button } from './ui/button';
-import { Product } from '@shared/schema';
-import { useToast } from '../hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-
-interface AddToCartButtonProps {
-  product: Product;
-  variant?: 'primary' | 'accent';
-  className?: string;
-}
+// ... (keep existing imports)
 
 function AddToCartButton({ product, variant = 'primary', className = '' }: AddToCartButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -20,16 +10,19 @@ function AddToCartButton({ product, variant = 'primary', className = '' }: AddTo
       setIsLoading(true);
       console.log('Añadiendo producto al carrito desde botón dedicado:', product.title);
       
-      // Primero obtenemos la información del carrito
-      const cartResponse = await fetch('/api/cart');
-      const cartData = await cartResponse.json();
-      console.log('Información del carrito obtenida:', cartData);
+      // Generate session ID and store in localStorage for consistency
+      let sessionId = localStorage.getItem('cart-session-id');
+      if (!sessionId) {
+        sessionId = 'browser-session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('cart-session-id', sessionId);
+      }
       
-      // Ahora añadimos el producto al carrito
+      // Añadimos el producto al carrito
       const response = await fetch('/api/cart/items', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-session-id': sessionId
         },
         body: JSON.stringify({
           productId: product.id,
@@ -52,8 +45,11 @@ function AddToCartButton({ product, variant = 'primary', className = '' }: AddTo
       const responseData = await response.json();
       console.log('Producto añadido correctamente:', responseData);
       
-      // Actualizamos los datos del carrito
-      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+      // Force refresh cart data with a small delay
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+        queryClient.refetchQueries({ queryKey: ['/api/cart'] });
+      }, 100);
       
       // Mostramos mensaje de éxito
       toast({
@@ -61,9 +57,11 @@ function AddToCartButton({ product, variant = 'primary', className = '' }: AddTo
         description: `${product.title} se ha añadido a tu carrito.`
       });
       
-      // Abrimos el drawer del carrito
-      const event = new CustomEvent('open-cart-drawer');
-      window.dispatchEvent(event);
+      // Abrimos el drawer del carrito con delay to ensure data is updated
+      setTimeout(() => {
+        const event = new CustomEvent('open-cart-drawer');
+        window.dispatchEvent(event);
+      }, 300);
       
     } catch (error) {
       console.error('Error al añadir producto al carrito:', error);
@@ -76,21 +74,6 @@ function AddToCartButton({ product, variant = 'primary', className = '' }: AddTo
       setIsLoading(false);
     }
   };
-  
-  const colorClass = variant === 'primary' 
-    ? 'bg-primary hover:bg-primary/90' 
-    : 'bg-accent hover:bg-accent/90';
-  
-  return (
-    <Button 
-      className={`w-full ${colorClass} ${className}`}
-      onClick={handleAddToCart}
-      disabled={isLoading}
-    >
-      {isLoading ? 'Añadiendo...' : 'Añadir al Carrito'}
-    </Button>
-  );
-}
 
-export { AddToCartButton };
-export default AddToCartButton;
+  // ... rest of component
+}
