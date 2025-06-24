@@ -11,14 +11,19 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
-  console.log(`${req.method} /api/products`);
+  const { id } = req.query;
+  console.log(`${req.method} /api/products - ID: ${id || 'all'}`);
 
   try {
     if (req.method === 'GET') {
-      const { id } = req.query;
-      
       if (id) {
-        // Get single product by ID
+        // Get single product by ID - convert to integer for proper query
+        const productId = parseInt(id, 10);
+        
+        if (isNaN(productId)) {
+          return res.status(400).json({ error: 'Invalid product ID' });
+        }
+        
         const result = await pool.query(`
           SELECT 
             id,
@@ -33,17 +38,22 @@ module.exports = async (req, res) => {
             badge,
             download_url as "downloadUrl",
             preview_url as "previewUrl",
+            is_bestseller as "isBestseller",
+            is_new as "isNew",
             created_at as "createdAt",
             updated_at as "updatedAt"
           FROM products 
           WHERE id = $1 AND is_active = true
-        `, [id]);
+        `, [productId]);
+        
+        console.log(`Query result for ID ${productId}:`, result.rows.length, 'rows');
         
         if (result.rows.length === 0) {
+          console.log(`Product ${productId} not found`);
           return res.status(404).json({ error: 'Product not found' });
         }
         
-        console.log(`Found product ${id}:`, result.rows[0]);
+        console.log(`Found product ${productId}:`, result.rows[0].title);
         return res.json(result.rows[0]);
         
       } else {
@@ -62,6 +72,8 @@ module.exports = async (req, res) => {
             badge,
             download_url as "downloadUrl",
             preview_url as "previewUrl",
+            is_bestseller as "isBestseller",
+            is_new as "isNew",
             created_at as "createdAt",
             updated_at as "updatedAt"
           FROM products 
