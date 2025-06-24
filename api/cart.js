@@ -1,4 +1,4 @@
-const { Pool } = require('@neondatabase/serverless');
+import { Pool } from '@neondatabase/serverless';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -23,7 +23,7 @@ function convertGoogleDriveUrl(url) {
   return url;
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-session-id, Cookie');
@@ -116,7 +116,6 @@ module.exports = async (req, res) => {
           [sessionId]
         );
         cartId = newCart.rows[0].id;
-        console.log(`Created new cart ${cartId} for session ${sessionId}`);
       } else {
         cartId = cartResult.rows[0].id;
       }
@@ -134,16 +133,15 @@ module.exports = async (req, res) => {
           'UPDATE cart_items SET quantity = $1 WHERE id = $2',
           [newQuantity, existingItem.rows[0].id]
         );
-        console.log(`Updated product ${productId} quantity to ${newQuantity}`);
       } else {
         // Add new item
         await pool.query(
           'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)',
           [cartId, productId, quantity]
         );
-        console.log(`Added new product ${productId} to cart ${cartId}`);
       }
       
+      console.log(`Added product ${productId} to cart for session ${sessionId}`);
       return res.json({ success: true });
       
     } else if (req.method === 'PUT') {
@@ -204,4 +202,4 @@ module.exports = async (req, res) => {
       details: error.message 
     });
   }
-};
+}
