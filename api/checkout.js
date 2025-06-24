@@ -1,6 +1,15 @@
 const { Pool } = require('@neondatabase/serverless');
+const Stripe = require('stripe');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2023-10-16',
+});
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,19 +24,26 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'POST') {
-      const { amount, currency = 'mxn' } = req.body;
+      const { amount, currency = 'mxn', customer } = req.body;
       
       if (!amount || amount <= 0) {
         return res.status(400).json({ error: 'Invalid amount' });
       }
       
-      // For now, return a mock client_secret for testing
-      // In production, this would integrate with Stripe
-      const clientSecret = `pi_test_${Date.now()}_secret_test`;
+      // Create Stripe payment intent
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount), // Amount in centavos for MXN
+        currency: currency.toLowerCase(),
+        metadata: {
+          customer_name: customer ? `${customer.firstName} ${customer.lastName}` : 'Guest',
+          customer_email: customer?.email || 'no-email@audiomotivate.com'
+        },
+        receipt_email: customer?.email,
+      });
       
-      console.log(`Created payment intent for ${amount} ${currency.toUpperCase()}`);
+      console.log(`Created Stripe payment intent ${paymentIntent.id} for ${amount} ${currency.toUpperCase()}`);
       return res.json({ 
-        clientSecret,
+        clientSecret: paymentIntent.client_secret,
         amount,
         currency 
       });
