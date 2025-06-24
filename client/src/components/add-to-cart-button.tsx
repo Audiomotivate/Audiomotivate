@@ -1,4 +1,22 @@
-// ... (keep existing imports)
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from './ui/button';
+import { useToast } from '../hooks/use-toast';
+
+interface Product {
+  id: number;
+  title: string;
+  price: number;
+  imageUrl: string;
+  type: string;
+  category: string;
+}
+
+interface AddToCartButtonProps {
+  product: Product;
+  variant?: 'primary' | 'accent';
+  className?: string;
+}
 
 function AddToCartButton({ product, variant = 'primary', className = '' }: AddToCartButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -74,6 +92,20 @@ function AddToCartButton({ product, variant = 'primary', className = '' }: AddTo
       setIsLoading(false);
     }
   };
-
-  // ... rest of component
+  
+  const colorClass = variant === 'primary' 
+    ? 'bg-primary hover:bg-primary/90' 
+    : 'bg-accent hover:bg-accent/90';
+  
+  return (
+    <Button 
+      className={`w-full ${colorClass} ${className}`}
+      onClick={handleAddToCart}
+      disabled={isLoading}
+    >
+      {isLoading ? 'Añadiendo...' : 'Añadir al Carrito'}
+    </Button>
+  );
 }
+
+export default AddToCartButton;
