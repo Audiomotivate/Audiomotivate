@@ -6,26 +6,37 @@ import { CartItemWithProduct } from '@shared/schema';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
-import { ShoppingBag, CreditCard, User, Mail, Shield, CheckCircle, Star, Download, Clock, Smartphone } from 'lucide-react';
+import { ShoppingBag, CreditCard, User, Mail, Shield, Star, AlertCircle } from 'lucide-react';
 import { Link } from 'wouter';
-import TestimonialsCarousel from '../components/testimonials-carousel';
-import Header from '../components/header';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY!);
+// Production-safe Stripe initialization
+const getStripePromise = () => {
+  try {
+    const key = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+    if (!key) {
+      console.error('Missing VITE_STRIPE_PUBLIC_KEY');
+      return null;
+    }
+    return loadStripe(key);
+  } catch (error) {
+    console.error('Stripe initialization failed:', error);
+    return null;
+  }
+};
+
+const stripePromise = getStripePromise();
 
 interface CartResponse {
-  cart: {
-    id: number;
-    sessionId: string;
-  };
+  cart: { id: number; sessionId: string; };
   items: CartItemWithProduct[];
 }
 
-function CheckoutForm({ total }: { total: number }) {
+function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItemWithProduct[] }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
+  const [processingStep, setProcessingStep] = useState('');
   const [customerInfo, setCustomerInfo] = useState({
     firstName: '',
     lastName: '',
@@ -35,9 +46,7 @@ function CheckoutForm({ total }: { total: number }) {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!stripe || !elements) {
-      return;
-    }
+    if (!stripe || !elements) return;
 
     if (!customerInfo.firstName || !customerInfo.lastName || !customerInfo.email) {
       setMessage('Por favor completa todos los campos requeridos');
@@ -45,50 +54,75 @@ function CheckoutForm({ total }: { total: number }) {
     }
 
     setIsProcessing(true);
+    setMessage('');
 
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
-        payment_method_data: {
-          billing_details: {
-            email: customerInfo.email,
-            name: `${customerInfo.firstName} ${customerInfo.lastName}`,
-          },
+    try {
+      setProcessingStep('Procesando pago...');
+      
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`,
+          payment_method_data: {
+            billing_details: {
+              email: customerInfo.email,
+              name: `${customerInfo.firstName} ${customerInfo.lastName}`,
+            },
+          }
+        }
+      });
+
+      if (error) {
+        setMessage(`Error: ${error.message}`);
+        setIsProcessing(false);
+        setProcessingStep('');
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        setProcessingStep('¡Pago exitoso! Enviando email...');
+        
+        try {
+          const emailResponse = await fetch('/api/send-download-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customerEmail: customerInfo.email,
+              customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
+              products: cartItems.map(item => ({
+                title: item.product.title,
+                downloadUrl: item.product.downloadUrl || item.product.previewUrl
+              })),
+              paymentIntentId: paymentIntent.id
+            })
+          });
+
+          if (emailResponse.ok) {
+            setProcessingStep('¡Email enviado! Redirigiendo...');
+            setMessage(`✅ Email de descarga enviado a ${customerInfo.email}`);
+            
+            setTimeout(async () => {
+              try {
+                await fetch('/api/cart', { method: 'DELETE' });
+              } catch (cartError) {
+                console.warn('Error clearing cart:', cartError);
+              }
+              window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
+            }, 2000);
+          } else {
+            setMessage('✅ Pago exitoso. Te contactaremos con los enlaces de descarga.');
+            setTimeout(() => {
+              window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
+            }, 3000);
+          }
+        } catch (emailError) {
+          setMessage('✅ Pago exitoso. Te contactaremos con los enlaces de descarga.');
+          setTimeout(() => {
+            window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
+          }, 3000);
         }
       }
-    });
-
-    // If payment succeeds, send download email
-    if (!error && paymentIntent && paymentIntent.status === 'succeeded') {
-      try {
-        // Get cart items for email
-        const cartResponse = await fetch('/api/cart');
-        const cartData = await cartResponse.json();
-        
-        // Send download email
-        await fetch('/api/send-download-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customerEmail: customerInfo.email,
-            customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
-            products: cartData.items.map(item => ({
-              title: item.product.title,
-              downloadUrl: item.product.downloadUrl || item.product.previewUrl
-            })),
-            paymentIntentId: paymentIntent.id
-          })
-        });
-      } catch (emailError) {
-        console.error('Error sending download email:', emailError);
-        // Don't block the success flow if email fails
-      }
-    }
-
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    } catch (err) {
+      setMessage('Error procesando el pago. Intenta nuevamente.');
       setIsProcessing(false);
+      setProcessingStep('');
     }
   };
 
@@ -104,28 +138,24 @@ function CheckoutForm({ total }: { total: number }) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
               <input 
                 type="text" 
                 required
                 value={customerInfo.firstName}
                 onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Tu nombre"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Apellido *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Apellido *</label>
               <input 
                 type="text" 
                 required
                 value={customerInfo.lastName}
                 onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Tu apellido"
               />
             </div>
@@ -141,9 +171,12 @@ function CheckoutForm({ total }: { total: number }) {
               required
               value={customerInfo.email}
               onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="tu@email.com"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Los enlaces de descarga se enviarán a este email
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -161,27 +194,29 @@ function CheckoutForm({ total }: { total: number }) {
               options={{
                 layout: 'accordion',
                 paymentMethodOrder: ['card'],
-                fields: {
-                  billingDetails: 'never'
-                },
-                terms: {
-                  card: 'never'
-                },
-                wallets: {
-                  applePay: 'never',
-                  googlePay: 'never'
-                }
+                fields: { billingDetails: 'never' },
+                terms: { card: 'never' },
+                wallets: { applePay: 'never', googlePay: 'never' }
               }}
             />
           </div>
           
           {message && (
             <div className={`p-4 rounded-lg text-sm font-medium ${
-              message.includes('exitoso') 
+              message.includes('✅') 
                 ? 'bg-green-100 text-green-800 border border-green-200' 
                 : 'bg-red-100 text-red-800 border border-red-200'
             }`}>
               {message}
+            </div>
+          )}
+
+          {processingStep && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <p className="text-blue-800 text-sm font-medium">{processingStep}</p>
+              </div>
             </div>
           )}
 
@@ -195,13 +230,13 @@ function CheckoutForm({ total }: { total: number }) {
           <Button
             type="submit"
             disabled={!stripe || isProcessing || !customerInfo.email}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg transition-all duration-200"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg"
             size="lg"
           >
             {isProcessing ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Procesando Pago...
+                {processingStep || 'Procesando...'}
               </div>
             ) : (
               <div className="flex items-center justify-center">
@@ -212,14 +247,29 @@ function CheckoutForm({ total }: { total: number }) {
           </Button>
         </CardContent>
       </Card>
-
-
     </form>
   );
 }
 
+function SimpleHeader() {
+  return (
+    <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex items-center justify-between">
+          <Link href="/">
+            <div className="text-2xl font-bold">
+              <span className="text-yellow-500">Audio</span>
+              <span className="text-blue-600">Motívate</span>
+            </div>
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 export default function Checkout() {
-  const { data: cartData } = useQuery<CartResponse>({
+  const { data: cartData, isLoading: cartLoading, error: cartError } = useQuery<CartResponse>({
     queryKey: ['/api/cart'],
   });
 
@@ -228,59 +278,113 @@ export default function Checkout() {
   });
 
   const [clientSecret, setClientSecret] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
   const cartItems = cartData?.items || [];
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const total = subtotal;
+  const total = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
 
   useEffect(() => {
     if (total > 0) {
-      const timeoutId = setTimeout(() => {
-        console.error('Payment intent creation timeout');
-      }, 30000); // 30 seconds timeout
+      setLoading(true);
+      setError('');
 
-      console.log('Creating payment intent for total:', total);
+      const timeoutId = setTimeout(() => {
+        setError('Tiempo de espera agotado. Por favor recarga la página.');
+        setLoading(false);
+      }, 30000);
+
       fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          amount: total,
-          currency: 'mxn'
-        }),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ amount: total, currency: 'mxn' }),
       })
       .then(response => {
         clearTimeout(timeoutId);
-        console.log('Checkout response status:', response.status);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          return response.json().then(errorData => {
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          });
         }
         return response.json();
       })
       .then(data => {
-        console.log('Payment intent created:', data);
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
         } else {
-          console.error('No clientSecret in response:', data);
+          throw new Error('No se recibió clientSecret del servidor');
         }
+        setLoading(false);
       })
       .catch(error => {
         clearTimeout(timeoutId);
-        console.error('Error creating payment intent:', error);
+        setError(`Error al preparar el pago: ${error.message}`);
+        setLoading(false);
       });
 
       return () => clearTimeout(timeoutId);
     }
   }, [total]);
 
+  if (!stripePromise) {
+    return (
+      <>
+        <SimpleHeader />
+        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-red-600 mb-4">Error de configuración de pagos</p>
+            <Button onClick={() => window.location.reload()}>
+              Recargar página
+            </Button>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (cartLoading) {
+    return (
+      <>
+        <SimpleHeader />
+        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Cargando carrito...</p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (cartError) {
+    return (
+      <>
+        <SimpleHeader />
+        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-red-600 mb-4">Error cargando el carrito</p>
+            <Button onClick={() => window.location.reload()}>
+              Recargar página
+            </Button>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   if (cartItems.length === 0) {
     return (
       <>
-        <Header showMobileFixedSearch={false} />
+        <SimpleHeader />
         <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
           <div className="max-w-2xl mx-auto px-4 text-center">
             <ShoppingBag className="h-20 w-20 mx-auto text-gray-400 mb-6" />
@@ -301,7 +405,7 @@ export default function Checkout() {
 
   return (
     <>
-      <Header showMobileFixedSearch={false} />
+      <SimpleHeader />
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center mb-4">
@@ -318,7 +422,6 @@ export default function Checkout() {
           </div>
 
           <div className="grid lg:grid-cols-2 gap-8">
-            {/* Left Column - Order Summary and Testimonials */}
             <div className="space-y-6">
               <Card className="shadow-lg border-0">
                 <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
@@ -355,15 +458,9 @@ export default function Checkout() {
                   ))}
                   
                   <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200 mt-4">
-                    <div className="flex justify-between text-gray-700 text-sm">
-                      <span>Subtotal:</span>
-                      <span className="font-medium">{formatCurrency(subtotal)}</span>
-                    </div>
-                    <div className="border-t border-blue-200 pt-2">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total:</span>
-                        <span className="text-blue-600">{formatCurrency(total)}</span>
-                      </div>
+                    <div className="flex justify-between text-lg font-bold">
+                      <span>Total:</span>
+                      <span className="text-blue-600">{formatCurrency(total)}</span>
                     </div>
                     <p className="text-xs text-gray-500 text-center mt-2">
                       * Precios en pesos mexicanos (MXN)
@@ -372,15 +469,54 @@ export default function Checkout() {
                 </CardContent>
               </Card>
 
-              {/* Testimonials Carousel */}
-              {testimonials && testimonials.length > 0 && (
-                <TestimonialsCarousel testimonials={testimonials} />
+              {testimonials && Array.isArray(testimonials) && testimonials.length > 0 && (
+                <Card className="shadow-lg border-0">
+                  <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-t-lg">
+                    <CardTitle className="flex items-center space-x-2">
+                      <Star className="h-5 w-5" />
+                      <span>Lo que dicen nuestros clientes</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-5">
+                    <div className="space-y-4">
+                      {testimonials.slice(0, 3).map((testimonial, index) => (
+                        <div key={testimonial.id || index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-1">
+                              <p className="text-sm text-gray-700 mb-2">"{testimonial.content}"</p>
+                              <p className="text-xs font-medium text-blue-600">
+                                - {testimonial.name}
+                              </p>
+                            </div>
+                            <div className="flex text-yellow-400">
+                              {[...Array(5)].map((_, i) => (
+                                <Star key={i} className="h-3 w-3 fill-current" />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
 
-            {/* Right Column - Checkout Form */}
             <div>
-              {clientSecret ? (
+              {error ? (
+                <div className="text-center py-8">
+                  <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                  <p className="text-red-600 mb-4">{error}</p>
+                  <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    Reintentar
+                  </Button>
+                </div>
+              ) : loading || !clientSecret ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Preparando el pago...</p>
+                </div>
+              ) : (
                 <Elements 
                   stripe={stripePromise} 
                   options={{ 
@@ -389,24 +525,18 @@ export default function Checkout() {
                       theme: 'stripe',
                       variables: {
                         colorPrimary: '#2563eb',
+                        fontFamily: 'system-ui, sans-serif',
                       }
                     },
                     mode: 'payment',
                     currency: 'mxn'
                   }}
                 >
-                  <CheckoutForm total={total} />
+                  <CheckoutForm total={total} cartItems={cartItems} />
                 </Elements>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-4 text-gray-600">Preparando el pago...</p>
-                </div>
               )}
             </div>
           </div>
-
-
         </div>
       </main>
     </>
