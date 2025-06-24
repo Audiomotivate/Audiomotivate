@@ -46,7 +46,7 @@ function CheckoutForm({ total }: { total: number }) {
 
     setIsProcessing(true);
 
-    const { error } = await stripe.confirmPayment({
+    const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
@@ -58,6 +58,33 @@ function CheckoutForm({ total }: { total: number }) {
         }
       }
     });
+
+    // If payment succeeds, send download email
+    if (!error && paymentIntent && paymentIntent.status === 'succeeded') {
+      try {
+        // Get cart items for email
+        const cartResponse = await fetch('/api/cart');
+        const cartData = await cartResponse.json();
+        
+        // Send download email
+        await fetch('/api/send-download-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerEmail: customerInfo.email,
+            customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
+            products: cartData.items.map(item => ({
+              title: item.product.title,
+              downloadUrl: item.product.downloadUrl || item.product.previewUrl
+            })),
+            paymentIntentId: paymentIntent.id
+          })
+        });
+      } catch (emailError) {
+        console.error('Error sending download email:', emailError);
+        // Don't block the success flow if email fails
+      }
+    }
 
     if (error) {
       setMessage(`Error: ${error.message}`);
@@ -130,7 +157,30 @@ function CheckoutForm({ total }: { total: number }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 border border-gray-300 rounded-lg bg-white">
-            <PaymentElement />
+            <PaymentElement 
+              options={{
+                layout: 'tabs',
+                paymentMethodOrder: ['card'],
+                fields: {
+                  billingDetails: {
+                    address: 'never'
+                  }
+                },
+                terms: {
+                  card: 'never'
+                },
+                wallets: {
+                  applePay: 'never',
+                  googlePay: 'never'
+                },
+                defaultValues: {
+                  billingDetails: {
+                    name: `${customerInfo.firstName} ${customerInfo.lastName}`,
+                    email: customerInfo.email,
+                  }
+                }
+              }}
+            />
           </div>
           
           {message && (
@@ -329,7 +379,22 @@ export default function Checkout() {
             {/* Right Column - Checkout Form */}
             <div>
               {clientSecret ? (
-                <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <Elements 
+                  stripe={stripePromise} 
+                  options={{ 
+                    clientSecret,
+                    appearance: {
+                      theme: 'stripe',
+                      variables: {
+                        colorPrimary: '#2563eb',
+                      }
+                    },
+                    payment_method_types: ['card'], // Only allow cards, disable Link
+                    business: {
+                      name: 'Audio Motívate'
+                    }
+                  }}
+                >
                   <CheckoutForm total={total} />
                 </Elements>
               ) : (
