@@ -1,16 +1,8 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from './ui/button';
+import { Product } from '@shared/schema';
 import { useToast } from '../hooks/use-toast';
-
-interface Product {
-  id: number;
-  title: string;
-  price: number;
-  imageUrl: string;
-  type: string;
-  category: string;
-}
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AddToCartButtonProps {
   product: Product;
@@ -36,7 +28,7 @@ function AddToCartButton({ product, variant = 'primary', className = '' }: AddTo
       }
       
       // Añadimos el producto al carrito
-      const response = await fetch('/api/cart/items', {
+      const response = await fetch('/api/cart', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
