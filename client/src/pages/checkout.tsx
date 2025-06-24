@@ -1,17 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, useStripe, useElements, CardElement } from '@stripe/react-stripe-js';
+import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
 import { CartItemWithProduct } from '@shared/schema';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Separator } from '../components/ui/separator';
 import { formatCurrency } from '../lib/utils';
 import { ShoppingBag, CreditCard, User, Mail, Shield, CheckCircle, Star } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
-import TestimonialsCarousel from '../components/testimonials-carousel';
 import Header from '../components/header';
-import { queryClient } from '../lib/queryClient';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY!);
 
@@ -23,13 +20,12 @@ interface CartResponse {
   items: CartItemWithProduct[];
 }
 
-function CheckoutForm({ total, cartItems, testimonials }: { total: number; cartItems: CartItemWithProduct[]; testimonials?: any[] }) {
+function CheckoutForm({ total }: { total: number }) {
   const stripe = useStripe();
   const elements = useElements();
   const [, setLocation] = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
-  const [isCompleting, setIsCompleting] = useState(false);
   const [customerInfo, setCustomerInfo] = useState({
     firstName: '',
     lastName: '',
@@ -51,69 +47,28 @@ function CheckoutForm({ total, cartItems, testimonials }: { total: number; cartI
     setIsProcessing(true);
 
     try {
-      const response = await fetch('/api/create-payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          amount: total,
-          customer: customerInfo
-        }),
-      });
-
-      const { clientSecret } = await response.json();
-
-      const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card: elements.getElement(CardElement)!,
-          billing_details: {
-            email: customerInfo.email,
-            name: `${customerInfo.firstName} ${customerInfo.lastName}`,
-          },
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
+          payment_method_data: {
+            billing_details: {
+              email: customerInfo.email,
+              name: `${customerInfo.firstName} ${customerInfo.lastName}`,
+            },
+          }
         }
       });
 
       if (error) {
         setMessage(`Error: ${error.message}`);
         setIsProcessing(false);
-      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-        // Payment was successful and we can handle it here
-        setMessage('¡Pago exitoso! Preparando tu contenido...');
-        setIsCompleting(true);
-        
-        const customerName = encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`);
-        
-        // Show completion process step by step
-        setTimeout(() => {
-          setMessage('Verificando tu compra...');
-        }, 500);
-        
-        setTimeout(() => {
-          setMessage('Preparando acceso a tu contenido...');
-        }, 1000);
-        
-        setTimeout(() => {
-          setMessage('Finalizando... ¡Ya casi está listo!');
-        }, 1500);
-        
-        // Navigate immediately after payment confirmation
-        setTimeout(() => {
-          setLocation(`/order-success?name=${customerName}`);
-        }, 1800);
-      } else if (paymentIntent && paymentIntent.status === 'requires_action') {
-        // Payment needs additional authentication
-        setMessage('Se requiere autenticación adicional...');
-        setIsProcessing(false);
-      } else {
-        // Payment failed or is processing
-        setMessage('Procesando pago...');
-        setIsProcessing(false);
       }
     } catch (err) {
       console.error('Error en checkout:', err);
-      setMessage(`Error: ${err instanceof Error ? err.message : 'Ocurrió un error inesperado. Por favor intenta nuevamente.'}`);
+      setMessage('Error inesperado. Por favor intenta nuevamente.');
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   return (
@@ -195,23 +150,9 @@ function CheckoutForm({ total, cartItems, testimonials }: { total: number; cartI
             </label>
             <div className="space-y-3">
               <div className="p-4 border border-gray-300 rounded-lg bg-white shadow-sm">
-                <CardElement 
+                <PaymentElement 
                   options={{
-                    style: {
-                      base: {
-                        fontSize: '16px',
-                        color: '#374151',
-                        fontFamily: 'system-ui, -apple-system, sans-serif',
-                        lineHeight: '24px',
-                        '::placeholder': {
-                          color: '#9CA3AF',
-                        },
-                      },
-                      invalid: {
-                        color: '#EF4444',
-                      },
-                    },
-                    hidePostalCode: true,
+                    layout: "tabs"
                   }}
                 />
               </div>
@@ -258,14 +199,14 @@ function CheckoutForm({ total, cartItems, testimonials }: { total: number; cartI
           
           <Button
             type="submit"
-            disabled={!stripe || isProcessing || isCompleting || !customerInfo.email}
+            disabled={!stripe || isProcessing || !customerInfo.email}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
             size="lg"
           >
-            {(isProcessing || isCompleting) ? (
+            {isProcessing ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                {isCompleting ? 'Preparando tu contenido...' : 'Procesando Pago...'}
+                Procesando Pago...
               </div>
             ) : (
               <div className="flex items-center justify-center">
@@ -274,23 +215,6 @@ function CheckoutForm({ total, cartItems, testimonials }: { total: number; cartI
               </div>
             )}
           </Button>
-
-          {message && (
-            <div className={`p-4 rounded-lg text-center ${
-              message.includes('Error') 
-                ? 'bg-red-50 text-red-800 border border-red-200' 
-                : message.includes('exitoso') || isCompleting
-                  ? 'bg-green-50 text-green-800 border border-green-200'
-                  : 'bg-blue-50 text-blue-800 border border-blue-200'
-            }`}>
-              <div className="flex items-center justify-center space-x-2">
-                {(message.includes('exitoso') || isCompleting) && (
-                  <CheckCircle className="h-5 w-5 text-green-600 animate-pulse" />
-                )}
-                <p className="text-sm font-medium">{message}</p>
-              </div>
-            </div>
-          )}
 
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center text-xs text-gray-500">
@@ -304,7 +228,6 @@ function CheckoutForm({ total, cartItems, testimonials }: { total: number; cartI
           </div>
         </CardContent>
       </Card>
-
     </form>
   );
 }
@@ -314,9 +237,7 @@ export default function Checkout() {
     queryKey: ['/api/cart'],
   });
 
-  const { data: testimonials } = useQuery({
-    queryKey: ['/api/testimonials'],
-  });
+  const [clientSecret, setClientSecret] = useState('');
 
   // Scroll to top when component mounts
   useEffect(() => {
@@ -326,6 +247,27 @@ export default function Checkout() {
   const cartItems = cartData?.items || [];
   const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const total = subtotal;
+
+  // Create payment intent when cart is loaded
+  useEffect(() => {
+    if (total > 0) {
+      fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          amount: total,
+          currency: 'mxn'
+        }),
+      })
+      .then(response => response.json())
+      .then(data => {
+        setClientSecret(data.clientSecret);
+      })
+      .catch(error => {
+        console.error('Error creating payment intent:', error);
+      });
+    }
+  }, [total]);
 
   if (cartItems.length === 0) {
     return (
@@ -389,57 +331,50 @@ export default function Checkout() {
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1 text-sm">{item.product.title}</h3>
                       <p className="text-xs text-gray-600 capitalize mb-1">
-                        {item.product.type === 'audiobook' ? 'Audiolibro' : 
-                         item.product.type === 'video' ? 'Video' : 
-                         item.product.type === 'guide' ? 'Guía' : 'PDF'}
+                        {item.product.type}
                       </p>
-                      <p className="text-xs font-medium text-blue-600">
+                      <p className="text-xs text-gray-500">
                         Cantidad: {item.quantity}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-base text-gray-900">
-                        {formatCurrency(item.product.price * item.quantity)}
-                      </p>
+                      <p className="font-bold text-blue-600">{formatCurrency(item.product.price)}</p>
                     </div>
                   </div>
                 ))}
                 
-                <Separator className="my-4" />
-                
-                <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200">
-                  <div className="flex justify-between text-gray-700 text-sm">
+                <div className="border-t pt-3 space-y-2">
+                  <div className="flex justify-between text-sm">
                     <span>Subtotal:</span>
-                    <span className="font-medium">{formatCurrency(subtotal)}</span>
+                    <span>{formatCurrency(subtotal)}</span>
                   </div>
-                  <Separator />
-                  <div className="flex justify-between text-lg font-bold">
+                  
+                  <div className="flex justify-between text-lg font-bold text-blue-600">
                     <span>Total:</span>
-                    <span className="text-blue-600">{formatCurrency(subtotal)}</span>
+                    <span>{formatCurrency(total)}</span>
                   </div>
-                  <p className="text-xs text-gray-500 text-center mt-2">
-                    * Precios en pesos mexicanos (MXN)
-                  </p>
+                  <p className="text-xs text-gray-500">* Precios en pesos mexicanos (MXN)</p>
                 </div>
               </CardContent>
             </Card>
-
-            {/* Testimonials Carousel */}
-            {testimonials && <TestimonialsCarousel testimonials={testimonials} />}
-
           </div>
-
-
 
           {/* Right Column - Checkout Form */}
           <div>
-            <Elements stripe={stripePromise}>
-              <CheckoutForm total={total} cartItems={cartItems} testimonials={testimonials} />
-            </Elements>
+            {clientSecret ? (
+              <Elements stripe={stripePromise} options={{ clientSecret }}>
+                <CheckoutForm total={total} />
+              </Elements>
+            ) : (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Preparando el pago...</p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    </main>
+        </div>
+      </main>
     </>
   );
 }
