@@ -162,9 +162,7 @@ function CheckoutForm({ total }: { total: number }) {
                 layout: 'tabs',
                 paymentMethodOrder: ['card'],
                 fields: {
-                  billingDetails: {
-                    address: 'never'
-                  }
+                  billingDetails: 'never'
                 },
                 terms: {
                   card: 'never'
@@ -172,12 +170,6 @@ function CheckoutForm({ total }: { total: number }) {
                 wallets: {
                   applePay: 'never',
                   googlePay: 'never'
-                },
-                defaultValues: {
-                  billingDetails: {
-                    name: `${customerInfo.firstName} ${customerInfo.lastName}`,
-                    email: customerInfo.email,
-                  }
                 }
               }}
             />
@@ -245,6 +237,10 @@ export default function Checkout() {
 
   useEffect(() => {
     if (total > 0) {
+      const timeoutId = setTimeout(() => {
+        console.error('Payment intent creation timeout');
+      }, 30000); // 30 seconds timeout
+
       console.log('Creating payment intent for total:', total);
       fetch('/api/checkout', {
         method: 'POST',
@@ -255,6 +251,7 @@ export default function Checkout() {
         }),
       })
       .then(response => {
+        clearTimeout(timeoutId);
         console.log('Checkout response status:', response.status);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -270,8 +267,11 @@ export default function Checkout() {
         }
       })
       .catch(error => {
+        clearTimeout(timeoutId);
         console.error('Error creating payment intent:', error);
       });
+
+      return () => clearTimeout(timeoutId);
     }
   }, [total]);
 
@@ -389,10 +389,8 @@ export default function Checkout() {
                         colorPrimary: '#2563eb',
                       }
                     },
-                    payment_method_types: ['card'], // Only allow cards, disable Link
-                    business: {
-                      name: 'Audio Motívate'
-                    }
+                    mode: 'payment',
+                    currency: 'mxn'
                   }}
                 >
                   <CheckoutForm total={total} />
