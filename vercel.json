@@ -6,6 +6,22 @@
       "use": "@vercel/node"
     },
     {
+      "src": "api/products/[id].js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/cart.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/testimonials.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/checkout.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "api/admin/products.js",
       "use": "@vercel/node"
     },
@@ -39,8 +55,24 @@
   ],
   "routes": [
     {
+      "src": "/api/products/([^/]+)",
+      "dest": "/api/products/[id].js?id=$1"
+    },
+    {
       "src": "/api/products",
       "dest": "/api/products/index.js"
+    },
+    {
+      "src": "/api/cart",
+      "dest": "/api/cart.js"
+    },
+    {
+      "src": "/api/testimonials",
+      "dest": "/api/testimonials.js"
+    },
+    {
+      "src": "/api/checkout",
+      "dest": "/api/checkout.js"
     },
     {
       "src": "/api/admin/products",
