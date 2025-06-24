@@ -146,6 +146,53 @@ module.exports = async (req, res) => {
       
       return res.json({ success: true });
       
+    } else if (req.method === 'PUT') {
+      const { productId, quantity } = req.body;
+      
+      if (!productId || quantity < 0) {
+        return res.status(400).json({ error: 'Invalid product ID or quantity' });
+      }
+      
+      const result = await pool.query(`
+        UPDATE cart_items 
+        SET quantity = $3
+        FROM carts 
+        WHERE cart_items.cart_id = carts.id 
+          AND carts.session_id = $1 
+          AND cart_items.product_id = $2
+      `, [sessionId, productId, quantity]);
+      
+      console.log(`Updated quantity for product ${productId} to ${quantity}`);
+      return res.json({ success: true });
+      
+    } else if (req.method === 'DELETE') {
+      const { productId } = req.query;
+      
+      if (productId) {
+        // Remove specific item
+        await pool.query(`
+          DELETE FROM cart_items 
+          USING carts 
+          WHERE cart_items.cart_id = carts.id 
+            AND carts.session_id = $1 
+            AND cart_items.product_id = $2
+        `, [sessionId, productId]);
+        
+        console.log(`Removed product ${productId} from cart`);
+      } else {
+        // Clear entire cart
+        await pool.query(`
+          DELETE FROM cart_items 
+          USING carts 
+          WHERE cart_items.cart_id = carts.id 
+            AND carts.session_id = $1
+        `, [sessionId]);
+        
+        console.log(`Cleared cart for session ${sessionId}`);
+      }
+      
+      return res.json({ success: true });
+      
     } else {
       return res.status(405).json({ error: 'Method not allowed' });
     }
