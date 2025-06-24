@@ -1,4 +1,4 @@
-const { Pool } = require('@neondatabase/serverless');
+import { Pool } from '@neondatabase/serverless';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -23,7 +23,7 @@ function convertGoogleDriveUrl(url) {
   return url;
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -84,4 +84,4 @@ module.exports = async (req, res) => {
       details: error.message 
     });
   }
-};
+}
