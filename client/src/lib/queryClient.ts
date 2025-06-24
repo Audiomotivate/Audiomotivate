@@ -29,12 +29,29 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    // Get session ID for cart requests
+    let sessionId = null;
+    if (typeof window !== 'undefined') {
+      sessionId = localStorage.getItem('cart-session-id');
+      if (!sessionId) {
+        sessionId = 'browser-session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('cart-session-id', sessionId);
+      }
+    }
+
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    };
+
+    // Add session ID for cart requests
+    if (sessionId && (queryKey[0] as string).includes('/api/cart')) {
+      headers['x-session-id'] = sessionId;
+    }
+
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+      headers
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -43,7 +60,7 @@ export const getQueryFn: <T>(options: {
 
     await throwIfResNotOk(res);
     const data = await res.json();
-    console.log('Query Client - Fetched data:', data);
+    console.log('Query Client - Fetched data for', queryKey[0], ':', data);
     return data;
   };
 
