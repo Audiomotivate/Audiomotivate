@@ -6,31 +6,26 @@ import { CartItemWithProduct } from '@shared/schema';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
-import { ShoppingBag, CreditCard, User, Mail, Shield, Star, AlertCircle } from 'lucide-react';
+import { ShoppingBag, CreditCard, User, Mail, Shield, CheckCircle, Star, Download, Clock, Smartphone } from 'lucide-react';
 import { Link } from 'wouter';
+import TestimonialsCarousel from '../components/testimonials-carousel';
 import Header from '../components/header';
-
-// Safe import for testimonials carousel
-let TestimonialsCarousel: React.ComponentType<{testimonials: any[]}> | null = null;
-try {
-  TestimonialsCarousel = require('../components/testimonials-carousel').default;
-} catch (error) {
-  console.warn('TestimonialsCarousel not available');
-}
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY!);
 
 interface CartResponse {
-  cart: { id: number; sessionId: string; };
+  cart: {
+    id: number;
+    sessionId: string;
+  };
   items: CartItemWithProduct[];
 }
 
-function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItemWithProduct[] }) {
+function CheckoutForm({ total }: { total: number }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
-  const [processingStep, setProcessingStep] = useState('');
   const [customerInfo, setCustomerInfo] = useState({
     firstName: '',
     lastName: '',
@@ -40,7 +35,9 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!stripe || !elements) return;
+    if (!stripe || !elements) {
+      return;
+    }
 
     if (!customerInfo.firstName || !customerInfo.lastName || !customerInfo.email) {
       setMessage('Por favor completa todos los campos requeridos');
@@ -48,80 +45,50 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
     }
 
     setIsProcessing(true);
-    setMessage('');
 
-    try {
-      setProcessingStep('Procesando pago...');
-      
-      const { error, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`,
-          payment_method_data: {
-            billing_details: {
-              email: customerInfo.email,
-              name: `${customerInfo.firstName} ${customerInfo.lastName}`,
-            },
-          }
-        }
-      });
-
-      if (error) {
-        console.error('Payment error:', error);
-        setMessage(`Error: ${error.message}`);
-        setIsProcessing(false);
-        setProcessingStep('');
-      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-        setProcessingStep('¡Pago exitoso! Enviando email...');
-        
-        // Send download email
-        try {
-          const emailResponse = await fetch('/api/send-download-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customerEmail: customerInfo.email,
-              customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
-              products: cartItems.map(item => ({
-                title: item.product.title,
-                downloadUrl: item.product.downloadUrl || item.product.previewUrl
-              })),
-              paymentIntentId: paymentIntent.id
-            })
-          });
-
-          if (emailResponse.ok) {
-            setProcessingStep('¡Email enviado! Redirigiendo...');
-            setMessage(`✅ Email de descarga enviado a ${customerInfo.email}`);
-            
-            // Clear cart and redirect
-            setTimeout(async () => {
-              try {
-                await fetch('/api/cart', { method: 'DELETE' });
-              } catch (cartError) {
-                console.warn('Error clearing cart:', cartError);
-              }
-              window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
-            }, 2000);
-          } else {
-            setMessage('✅ Pago exitoso. Te contactaremos con los enlaces de descarga.');
-            setTimeout(() => {
-              window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
-            }, 3000);
-          }
-        } catch (emailError) {
-          console.error('Error sending email:', emailError);
-          setMessage('✅ Pago exitoso. Te contactaremos con los enlaces de descarga.');
-          setTimeout(() => {
-            window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
-          }, 3000);
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`,
+        payment_method_data: {
+          billing_details: {
+            email: customerInfo.email,
+            name: `${customerInfo.firstName} ${customerInfo.lastName}`,
+          },
         }
       }
-    } catch (err) {
-      console.error('Payment confirmation error:', err);
-      setMessage('Error procesando el pago. Intenta nuevamente.');
+    });
+
+    // If payment succeeds, send download email
+    if (!error && paymentIntent && paymentIntent.status === 'succeeded') {
+      try {
+        // Get cart items for email
+        const cartResponse = await fetch('/api/cart');
+        const cartData = await cartResponse.json();
+        
+        // Send download email
+        await fetch('/api/send-download-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerEmail: customerInfo.email,
+            customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
+            products: cartData.items.map(item => ({
+              title: item.product.title,
+              downloadUrl: item.product.downloadUrl || item.product.previewUrl
+            })),
+            paymentIntentId: paymentIntent.id
+          })
+        });
+      } catch (emailError) {
+        console.error('Error sending download email:', emailError);
+        // Don't block the success flow if email fails
+      }
+    }
+
+    if (error) {
+      setMessage(`Error: ${error.message}`);
       setIsProcessing(false);
-      setProcessingStep('');
     }
   };
 
@@ -137,24 +104,28 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre *
+              </label>
               <input 
                 type="text" 
                 required
                 value={customerInfo.firstName}
                 onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="Tu nombre"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Apellido *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Apellido *
+              </label>
               <input 
                 type="text" 
                 required
                 value={customerInfo.lastName}
                 onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="Tu apellido"
               />
             </div>
@@ -170,12 +141,9 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
               required
               value={customerInfo.email}
               onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               placeholder="tu@email.com"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Los enlaces de descarga se enviarán a este email
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -191,7 +159,7 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
           <div className="p-4 border border-gray-300 rounded-lg bg-white">
             <PaymentElement 
               options={{
-                layout: 'tabs',
+                layout: 'accordion',
                 paymentMethodOrder: ['card'],
                 fields: {
                   billingDetails: 'never'
@@ -209,20 +177,11 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
           
           {message && (
             <div className={`p-4 rounded-lg text-sm font-medium ${
-              message.includes('✅') 
+              message.includes('exitoso') 
                 ? 'bg-green-100 text-green-800 border border-green-200' 
                 : 'bg-red-100 text-red-800 border border-red-200'
             }`}>
               {message}
-            </div>
-          )}
-
-          {processingStep && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <p className="text-blue-800 text-sm font-medium">{processingStep}</p>
-              </div>
             </div>
           )}
 
@@ -236,13 +195,13 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
           <Button
             type="submit"
             disabled={!stripe || isProcessing || !customerInfo.email}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg transition-all duration-200"
             size="lg"
           >
             {isProcessing ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                {processingStep || 'Procesando...'}
+                Procesando Pago...
               </div>
             ) : (
               <div className="flex items-center justify-center">
@@ -253,12 +212,14 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
           </Button>
         </CardContent>
       </Card>
+
+
     </form>
   );
 }
 
 export default function Checkout() {
-  const { data: cartData, isLoading: cartLoading, error: cartError } = useQuery<CartResponse>({
+  const { data: cartData } = useQuery<CartResponse>({
     queryKey: ['/api/cart'],
   });
 
@@ -267,34 +228,25 @@ export default function Checkout() {
   });
 
   const [clientSecret, setClientSecret] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
   const cartItems = cartData?.items || [];
-  const total = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const total = subtotal;
 
   useEffect(() => {
     if (total > 0) {
-      setLoading(true);
-      setError('');
-
       const timeoutId = setTimeout(() => {
-        setError('Tiempo de espera agotado. Por favor recarga la página.');
-        setLoading(false);
-      }, 30000);
+        console.error('Payment intent creation timeout');
+      }, 30000); // 30 seconds timeout
 
       console.log('Creating payment intent for total:', total);
-      
       fetch('/api/checkout', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           amount: total,
           currency: 'mxn'
@@ -303,64 +255,27 @@ export default function Checkout() {
       .then(response => {
         clearTimeout(timeoutId);
         console.log('Checkout response status:', response.status);
-        
         if (!response.ok) {
-          return response.json().then(errorData => {
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-          });
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         return response.json();
       })
       .then(data => {
-        console.log('Payment intent response:', data);
+        console.log('Payment intent created:', data);
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
         } else {
-          throw new Error('No se recibió clientSecret del servidor');
+          console.error('No clientSecret in response:', data);
         }
-        setLoading(false);
       })
       .catch(error => {
         clearTimeout(timeoutId);
         console.error('Error creating payment intent:', error);
-        setError(`Error al preparar el pago: ${error.message}`);
-        setLoading(false);
       });
 
       return () => clearTimeout(timeoutId);
     }
   }, [total]);
-
-  if (cartLoading) {
-    return (
-      <>
-        <Header showMobileFixedSearch={false} />
-        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Cargando carrito...</p>
-          </div>
-        </main>
-      </>
-    );
-  }
-
-  if (cartError) {
-    return (
-      <>
-        <Header showMobileFixedSearch={false} />
-        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-600 mb-4">Error cargando el carrito</p>
-            <Button onClick={() => window.location.reload()}>
-              Recargar página
-            </Button>
-          </div>
-        </main>
-      </>
-    );
-  }
 
   if (cartItems.length === 0) {
     return (
@@ -403,6 +318,7 @@ export default function Checkout() {
           </div>
 
           <div className="grid lg:grid-cols-2 gap-8">
+            {/* Left Column - Order Summary and Testimonials */}
             <div className="space-y-6">
               <Card className="shadow-lg border-0">
                 <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
@@ -439,9 +355,15 @@ export default function Checkout() {
                   ))}
                   
                   <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200 mt-4">
-                    <div className="flex justify-between text-lg font-bold">
-                      <span>Total:</span>
-                      <span className="text-blue-600">{formatCurrency(total)}</span>
+                    <div className="flex justify-between text-gray-700 text-sm">
+                      <span>Subtotal:</span>
+                      <span className="font-medium">{formatCurrency(subtotal)}</span>
+                    </div>
+                    <div className="border-t border-blue-200 pt-2">
+                      <div className="flex justify-between text-lg font-bold">
+                        <span>Total:</span>
+                        <span className="text-blue-600">{formatCurrency(total)}</span>
+                      </div>
                     </div>
                     <p className="text-xs text-gray-500 text-center mt-2">
                       * Precios en pesos mexicanos (MXN)
@@ -450,32 +372,41 @@ export default function Checkout() {
                 </CardContent>
               </Card>
 
-              {TestimonialsCarousel && testimonials && testimonials.length > 0 && (
+              {/* Testimonials Carousel */}
+              {testimonials && testimonials.length > 0 && (
                 <TestimonialsCarousel testimonials={testimonials} />
               )}
             </div>
 
+            {/* Right Column - Checkout Form */}
             <div>
-              {error ? (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                  <p className="text-red-600 mb-4">{error}</p>
-                  <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Reintentar
-                  </Button>
-                </div>
-              ) : loading || !clientSecret ? (
+              {clientSecret ? (
+                <Elements 
+                  stripe={stripePromise} 
+                  options={{ 
+                    clientSecret,
+                    appearance: {
+                      theme: 'stripe',
+                      variables: {
+                        colorPrimary: '#2563eb',
+                      }
+                    },
+                    mode: 'payment',
+                    currency: 'mxn'
+                  }}
+                >
+                  <CheckoutForm total={total} />
+                </Elements>
+              ) : (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="mt-4 text-gray-600">Preparando el pago...</p>
                 </div>
-              ) : (
-                <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm total={total} cartItems={cartItems} />
-                </Elements>
               )}
             </div>
           </div>
+
+
         </div>
       </main>
     </>
