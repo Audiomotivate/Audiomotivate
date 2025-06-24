@@ -170,6 +170,66 @@ function CheckoutForm({ total }: { total: number }) {
           </Button>
         </CardContent>
       </Card>
+
+      {/* What You Get Section */}
+      <Card className="shadow-lg border-0">
+        <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-t-lg">
+          <CardTitle className="flex items-center space-x-2">
+            <Download className="h-5 w-5" />
+            <span>Lo que obtienes</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-gray-900">Descarga instantánea</h4>
+                <p className="text-sm text-gray-600">Recibe inmediatamente el enlace de descarga por email</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-gray-900">Audio de alta calidad</h4>
+                <p className="text-sm text-gray-600">Formato MP3 de alta resolución para la mejor experiencia</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-gray-900">Compatible con todos los dispositivos</h4>
+                <p className="text-sm text-gray-600">Escucha en tu móvil, tablet, computadora o reproductor de audio</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-gray-900">Acceso de por vida</h4>
+                <p className="text-sm text-gray-600">Descarga y conserva tu contenido para siempre</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-gray-900">Sin anuncios ni interrupciones</h4>
+                <p className="text-sm text-gray-600">Disfruta de una experiencia premium sin publicidad</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg border border-blue-200 mt-4">
+            <p className="text-sm text-center text-gray-700">
+              <Shield className="h-4 w-4 inline text-blue-600 mr-1" />
+              <strong>Compra 100% segura</strong> • Garantía de satisfacción o tu dinero de vuelta
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </form>
   );
 }
@@ -265,9 +325,10 @@ export default function Checkout() {
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-12">
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Left Column - Order Summary and Testimonials */}
             <div className="space-y-6">
-              <Card className="shadow-xl border-0">
+              <Card className="shadow-lg border-0">
                 <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
                   <CardTitle className="flex items-center space-x-2">
                     <ShoppingBag className="h-5 w-5" />
@@ -285,35 +346,48 @@ export default function Checkout() {
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 mb-1 text-sm">{item.product.title}</h3>
                         <p className="text-xs text-gray-600 capitalize mb-1">
-                          {item.product.type}
+                          {item.product.type === 'audiobook' ? 'Audiolibro' : 
+                           item.product.type === 'audio' ? 'Audio' : 
+                           item.product.type === 'guide' ? 'Guía' : 'Script'}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-blue-600 font-medium">
                           Cantidad: {item.quantity}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-blue-600">{formatCurrency(item.product.price)}</p>
+                        <p className="font-bold text-base text-gray-900">
+                          {formatCurrency(item.product.price * item.quantity)}
+                        </p>
                       </div>
                     </div>
                   ))}
                   
-                  <div className="border-t pt-3 space-y-2">
-                    <div className="flex justify-between text-sm">
+                  <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200 mt-4">
+                    <div className="flex justify-between text-gray-700 text-sm">
                       <span>Subtotal:</span>
-                      <span>{formatCurrency(subtotal)}</span>
+                      <span className="font-medium">{formatCurrency(subtotal)}</span>
                     </div>
-                    
-                    <div className="flex justify-between text-lg font-bold text-blue-600">
-                      <span>Total:</span>
-                      <span>{formatCurrency(total)}</span>
+                    <div className="border-t border-blue-200 pt-2">
+                      <div className="flex justify-between text-lg font-bold">
+                        <span>Total:</span>
+                        <span className="text-blue-600">{formatCurrency(total)}</span>
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-500">* Precios en pesos mexicanos (MXN)</p>
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      * Precios en pesos mexicanos (MXN)
+                    </p>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Testimonials Carousel */}
+              {testimonials && testimonials.length > 0 && (
+                <TestimonialsCarousel testimonials={testimonials} />
+              )}
             </div>
 
-            <div className="space-y-6">
+            {/* Right Column - Checkout Form */}
+            <div>
               {clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
                   <CheckoutForm total={total} />
@@ -323,75 +397,6 @@ export default function Checkout() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="mt-4 text-gray-600">Preparando el pago...</p>
                 </div>
-              )}
-              
-              {/* What You Get Section */}
-              <Card className="shadow-lg border-0">
-                <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-t-lg">
-                  <CardTitle className="flex items-center space-x-2">
-                    <Download className="h-5 w-5" />
-                    <span>Lo que obtienes</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-5 space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-green-100 rounded-full">
-                        <Download className="h-4 w-4 text-green-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">Acceso instantáneo</h4>
-                        <p className="text-sm text-gray-600">Descarga inmediata después del pago</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-blue-100 rounded-full">
-                        <Smartphone className="h-4 w-4 text-blue-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">Compatible con todos los dispositivos</h4>
-                        <p className="text-sm text-gray-600">Escucha en móvil, tablet o computadora</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-purple-100 rounded-full">
-                        <Clock className="h-4 w-4 text-purple-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">Acceso de por vida</h4>
-                        <p className="text-sm text-gray-600">Sin límites de tiempo ni restricciones</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-yellow-100 rounded-full">
-                        <Star className="h-4 w-4 text-yellow-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">Contenido premium</h4>
-                        <p className="text-sm text-gray-600">Material exclusivo de alta calidad</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg border border-green-200">
-                    <p className="text-sm text-center text-gray-700">
-                      <CheckCircle className="h-4 w-4 inline text-green-600 mr-1" />
-                      <strong>Garantía de satisfacción:</strong> Si no estás completamente satisfecho, te devolvemos tu dinero.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Testimonials Section */}
-              {testimonials && testimonials.length > 0 && (
-                <Card className="shadow-lg border-0">
-                  <CardContent className="p-6">
-                    <TestimonialsCarousel testimonials={testimonials} />
-                  </CardContent>
-                </Card>
               )}
             </div>
           </div>
