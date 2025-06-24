@@ -2,6 +2,27 @@ const { Pool } = require('@neondatabase/serverless');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+// Function to convert Google Drive URLs to thumbnail format
+function convertGoogleDriveUrl(url) {
+  if (!url) return url;
+  
+  // If it's already a thumbnail URL, return as is
+  if (url.includes('thumbnail')) return url;
+  
+  // Convert Google Drive share URL to thumbnail
+  if (url.includes('drive.google.com/file/d/')) {
+    const fileIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch) {
+      return `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w300-h400`;
+    }
+  }
+  
+  // If it's already lh3.googleusercontent.com, return as is
+  if (url.includes('lh3.googleusercontent.com')) return url;
+  
+  return url;
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -50,7 +71,11 @@ module.exports = async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
     
-    return res.json(result.rows[0]);
+    // Convert image URL to proper format
+    const product = result.rows[0];
+    product.imageUrl = convertGoogleDriveUrl(product.imageUrl);
+    
+    return res.json(product);
     
   } catch (error) {
     console.error('Product detail API error:', error);
