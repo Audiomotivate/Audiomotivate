@@ -1,46 +1,87 @@
-const { neon } = require('@neondatabase/serverless');
+const { Pool } = require('@neondatabase/serverless');
 
-module.exports = async function handler(req, res) {
-  // CORS headers
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
-  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
-  console.log('API Products called - Method:', req.method, 'URL:', req.url);
-
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  try {
-    const sql = neon('postgresql://neondb_owner:npg_qBXg9wN8MpOv@ep-sparkling-river-aazlr1de-pooler.westus3.azure.neon.tech/neondb?sslmode=require');
+  console.log(`${req.method} /api/products`);
 
+  try {
     if (req.method === 'GET') {
-      console.log('Fetching products from Neon database...');
-      const products = await sql`
-        SELECT 
-          id, title, description, type, category, price, 
-          image_url as "imageUrl", download_url as "downloadUrl", 
-          preview_url as "previewUrl", duration, 
-          badge, is_bestseller as "isBestseller", 
-          is_new as "isNew", is_active as "isActive",
-          created_at as "createdAt", updated_at as "updatedAt"
-        FROM products 
-        WHERE is_active = true 
-        ORDER BY id DESC
-      `;
-      console.log('Products fetched:', products.length, 'items');
-      return res.status(200).json(products);
+      const { id } = req.query;
+      
+      if (id) {
+        // Get single product by ID
+        const result = await pool.query(`
+          SELECT 
+            id,
+            title,
+            description,
+            type,
+            category,
+            price,
+            image_url as "imageUrl",
+            duration,
+            is_active as "isActive",
+            badge,
+            download_url as "downloadUrl",
+            preview_url as "previewUrl",
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          FROM products 
+          WHERE id = $1 AND is_active = true
+        `, [id]);
+        
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        console.log(`Found product ${id}:`, result.rows[0]);
+        return res.json(result.rows[0]);
+        
+      } else {
+        // Get all active products
+        const result = await pool.query(`
+          SELECT 
+            id,
+            title,
+            description,
+            type,
+            category,
+            price,
+            image_url as "imageUrl",
+            duration,
+            is_active as "isActive",
+            badge,
+            download_url as "downloadUrl",
+            preview_url as "previewUrl",
+            created_at as "createdAt",
+            updated_at as "updatedAt"
+          FROM products 
+          WHERE is_active = true
+          ORDER BY created_at DESC
+        `);
+        
+        console.log(`Found ${result.rows.length} active products`);
+        return res.json(result.rows);
+      }
+      
+    } else {
+      return res.status(405).json({ error: 'Method not allowed' });
     }
     
-    return res.status(405).json({ error: 'Method not allowed' });
-    
   } catch (error) {
-    console.error('Neon Database Error:', error);
+    console.error('Database error:', error);
     return res.status(500).json({ 
-      error: 'Database connection failed',
-      message: error.message
+      error: 'Database operation failed',
+      details: error.message 
     });
   }
-}
+};
