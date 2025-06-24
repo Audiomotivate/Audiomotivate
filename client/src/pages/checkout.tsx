@@ -6,7 +6,7 @@ import { CartItemWithProduct } from '@shared/schema';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
-import { ShoppingBag, CreditCard, User, Mail, Shield, Star, CheckCircle } from 'lucide-react';
+import { ShoppingBag, CreditCard, User, Mail, Shield, Star, AlertCircle } from 'lucide-react';
 import { Link } from 'wouter';
 import Header from '../components/header';
 
@@ -67,11 +67,12 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
       });
 
       if (error) {
+        console.error('Payment error:', error);
         setMessage(`Error: ${error.message}`);
         setIsProcessing(false);
         setProcessingStep('');
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-        setProcessingStep('Pago aprobado! Enviando email de descarga...');
+        setProcessingStep('¡Pago exitoso! Enviando email...');
         
         // Send download email
         try {
@@ -90,23 +91,34 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
           });
 
           if (emailResponse.ok) {
-            setProcessingStep('Email enviado exitosamente! Redirigiendo...');
+            setProcessingStep('¡Email enviado! Redirigiendo...');
             setMessage(`✅ Email de descarga enviado a ${customerInfo.email}`);
             
-            // Small delay to show success message
-            setTimeout(() => {
+            // Clear cart and redirect
+            setTimeout(async () => {
+              try {
+                await fetch('/api/cart', { method: 'DELETE' });
+              } catch (cartError) {
+                console.warn('Error clearing cart:', cartError);
+              }
               window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
             }, 2000);
           } else {
-            setMessage('⚠️ Pago exitoso, pero no pudimos enviar el email. Te contactaremos pronto.');
+            setMessage('✅ Pago exitoso. Te contactaremos con los enlaces de descarga.');
+            setTimeout(() => {
+              window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
+            }, 3000);
           }
         } catch (emailError) {
           console.error('Error sending email:', emailError);
-          setMessage('⚠️ Pago exitoso, pero no pudimos enviar el email. Te contactaremos pronto.');
+          setMessage('✅ Pago exitoso. Te contactaremos con los enlaces de descarga.');
+          setTimeout(() => {
+            window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
+          }, 3000);
         }
       }
     } catch (err) {
-      console.error('Payment error:', err);
+      console.error('Payment confirmation error:', err);
       setMessage('Error procesando el pago. Intenta nuevamente.');
       setIsProcessing(false);
       setProcessingStep('');
@@ -199,8 +211,6 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
             <div className={`p-4 rounded-lg text-sm font-medium ${
               message.includes('✅') 
                 ? 'bg-green-100 text-green-800 border border-green-200' 
-                : message.includes('⚠️')
-                ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                 : 'bg-red-100 text-red-800 border border-red-200'
             }`}>
               {message}
@@ -248,7 +258,7 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
 }
 
 export default function Checkout() {
-  const { data: cartData, isLoading: cartLoading } = useQuery<CartResponse>({
+  const { data: cartData, isLoading: cartLoading, error: cartError } = useQuery<CartResponse>({
     queryKey: ['/api/cart'],
   });
 
@@ -272,31 +282,52 @@ export default function Checkout() {
       setLoading(true);
       setError('');
 
+      const timeoutId = setTimeout(() => {
+        setError('Tiempo de espera agotado. Por favor recarga la página.');
+        setLoading(false);
+      }, 30000);
+
+      console.log('Creating payment intent for total:', total);
+      
       fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ 
           amount: total,
-          currency: 'mxn',
-          cartItems: cartItems
+          currency: 'mxn'
         }),
       })
       .then(response => {
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        clearTimeout(timeoutId);
+        console.log('Checkout response status:', response.status);
+        
+        if (!response.ok) {
+          return response.json().then(errorData => {
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          });
+        }
         return response.json();
       })
       .then(data => {
+        console.log('Payment intent response:', data);
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
         } else {
-          throw new Error('No se recibió clientSecret');
+          throw new Error('No se recibió clientSecret del servidor');
         }
         setLoading(false);
       })
       .catch(error => {
+        clearTimeout(timeoutId);
+        console.error('Error creating payment intent:', error);
         setError(`Error al preparar el pago: ${error.message}`);
         setLoading(false);
       });
+
+      return () => clearTimeout(timeoutId);
     }
   }, [total]);
 
@@ -308,6 +339,23 @@ export default function Checkout() {
           <div className="max-w-2xl mx-auto px-4 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Cargando carrito...</p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (cartError) {
+    return (
+      <>
+        <Header showMobileFixedSearch={false} />
+        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-red-600 mb-4">Error cargando el carrito</p>
+            <Button onClick={() => window.location.reload()}>
+              Recargar página
+            </Button>
           </div>
         </main>
       </>
@@ -410,6 +458,7 @@ export default function Checkout() {
             <div>
               {error ? (
                 <div className="text-center py-8">
+                  <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                   <p className="text-red-600 mb-4">{error}</p>
                   <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 text-white">
                     Reintentar
