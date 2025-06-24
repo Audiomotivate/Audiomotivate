@@ -6,9 +6,17 @@ import { CartItemWithProduct } from '@shared/schema';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
-import { ShoppingBag, CreditCard, User, Mail, Shield, Star } from 'lucide-react';
+import { ShoppingBag, CreditCard, User, Mail, Shield, Star, CheckCircle } from 'lucide-react';
 import { Link } from 'wouter';
 import Header from '../components/header';
+
+// Safe import for testimonials carousel
+let TestimonialsCarousel: React.ComponentType<{testimonials: any[]}> | null = null;
+try {
+  TestimonialsCarousel = require('../components/testimonials-carousel').default;
+} catch (error) {
+  console.warn('TestimonialsCarousel not available');
+}
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY!);
 
@@ -17,11 +25,12 @@ interface CartResponse {
   items: CartItemWithProduct[];
 }
 
-function CheckoutForm({ total }: { total: number }) {
+function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItemWithProduct[] }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState('');
+  const [processingStep, setProcessingStep] = useState('');
   const [customerInfo, setCustomerInfo] = useState({
     firstName: '',
     lastName: '',
@@ -39,17 +48,68 @@ function CheckoutForm({ total }: { total: number }) {
     }
 
     setIsProcessing(true);
+    setMessage('');
 
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}`
+    try {
+      setProcessingStep('Procesando pago...');
+      
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`,
+          payment_method_data: {
+            billing_details: {
+              email: customerInfo.email,
+              name: `${customerInfo.firstName} ${customerInfo.lastName}`,
+            },
+          }
+        }
+      });
+
+      if (error) {
+        setMessage(`Error: ${error.message}`);
+        setIsProcessing(false);
+        setProcessingStep('');
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        setProcessingStep('Pago aprobado! Enviando email de descarga...');
+        
+        // Send download email
+        try {
+          const emailResponse = await fetch('/api/send-download-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customerEmail: customerInfo.email,
+              customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
+              products: cartItems.map(item => ({
+                title: item.product.title,
+                downloadUrl: item.product.downloadUrl || item.product.previewUrl
+              })),
+              paymentIntentId: paymentIntent.id
+            })
+          });
+
+          if (emailResponse.ok) {
+            setProcessingStep('Email enviado exitosamente! Redirigiendo...');
+            setMessage(`✅ Email de descarga enviado a ${customerInfo.email}`);
+            
+            // Small delay to show success message
+            setTimeout(() => {
+              window.location.href = `/order-success?name=${encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`)}&email=${encodeURIComponent(customerInfo.email)}`;
+            }, 2000);
+          } else {
+            setMessage('⚠️ Pago exitoso, pero no pudimos enviar el email. Te contactaremos pronto.');
+          }
+        } catch (emailError) {
+          console.error('Error sending email:', emailError);
+          setMessage('⚠️ Pago exitoso, pero no pudimos enviar el email. Te contactaremos pronto.');
+        }
       }
-    });
-
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    } catch (err) {
+      console.error('Payment error:', err);
+      setMessage('Error procesando el pago. Intenta nuevamente.');
       setIsProcessing(false);
+      setProcessingStep('');
     }
   };
 
@@ -101,6 +161,9 @@ function CheckoutForm({ total }: { total: number }) {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="tu@email.com"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Los enlaces de descarga se enviarán a este email
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -114,12 +177,42 @@ function CheckoutForm({ total }: { total: number }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 border border-gray-300 rounded-lg bg-white">
-            <PaymentElement />
+            <PaymentElement 
+              options={{
+                layout: 'tabs',
+                paymentMethodOrder: ['card'],
+                fields: {
+                  billingDetails: 'never'
+                },
+                terms: {
+                  card: 'never'
+                },
+                wallets: {
+                  applePay: 'never',
+                  googlePay: 'never'
+                }
+              }}
+            />
           </div>
           
           {message && (
-            <div className="p-4 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-200">
+            <div className={`p-4 rounded-lg text-sm font-medium ${
+              message.includes('✅') 
+                ? 'bg-green-100 text-green-800 border border-green-200' 
+                : message.includes('⚠️')
+                ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                : 'bg-red-100 text-red-800 border border-red-200'
+            }`}>
               {message}
+            </div>
+          )}
+
+          {processingStep && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <p className="text-blue-800 text-sm font-medium">{processingStep}</p>
+              </div>
             </div>
           )}
 
@@ -139,7 +232,7 @@ function CheckoutForm({ total }: { total: number }) {
             {isProcessing ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Procesando Pago...
+                {processingStep || 'Procesando...'}
               </div>
             ) : (
               <div className="flex items-center justify-center">
@@ -155,12 +248,16 @@ function CheckoutForm({ total }: { total: number }) {
 }
 
 export default function Checkout() {
-  const { data: cartData } = useQuery<CartResponse>({
+  const { data: cartData, isLoading: cartLoading } = useQuery<CartResponse>({
     queryKey: ['/api/cart'],
   });
 
+  const { data: testimonials } = useQuery({
+    queryKey: ['/api/testimonials'],
+  });
+
   const [clientSecret, setClientSecret] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -173,26 +270,49 @@ export default function Checkout() {
   useEffect(() => {
     if (total > 0) {
       setLoading(true);
+      setError('');
+
       fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: total }),
+        body: JSON.stringify({ 
+          amount: total,
+          currency: 'mxn',
+          cartItems: cartItems
+        }),
       })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response.json();
+      })
       .then(data => {
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
         } else {
-          setError('Error al preparar el pago');
+          throw new Error('No se recibió clientSecret');
         }
         setLoading(false);
       })
       .catch(error => {
-        setError('Error de conexión');
+        setError(`Error al preparar el pago: ${error.message}`);
         setLoading(false);
       });
     }
   }, [total]);
+
+  if (cartLoading) {
+    return (
+      <>
+        <Header showMobileFixedSearch={false} />
+        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Cargando carrito...</p>
+          </div>
+        </main>
+      </>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -220,73 +340,91 @@ export default function Checkout() {
     <>
       <Header showMobileFixedSearch={false} />
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="text-center mb-8">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-4">
             <div className="flex items-center justify-center mb-3">
               <Star className="h-5 w-5 text-yellow-500 mr-2" />
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                La Inversión en tí es sin duda, la Mejor Inversión
+              <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                La Inversión en tí es sin duda, la Mejor Inversión.
               </h1>
               <Star className="h-5 w-5 text-yellow-500 ml-2" />
             </div>
+            <p className="text-base text-gray-700 max-w-2xl mx-auto">
+              Completa tu compra y recibe instantáneamente el contenido que te ayudará a alcanzar tus metas
+            </p>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-8">
-            <div>
-              <Card className="shadow-lg">
+            <div className="space-y-6">
+              <Card className="shadow-lg border-0">
                 <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
                   <CardTitle className="flex items-center space-x-2">
                     <ShoppingBag className="h-5 w-5" />
                     <span>Resumen del Pedido</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-5">
+                <CardContent className="p-5 space-y-3">
                   {cartItems.map((item) => (
-                    <div key={item.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg mb-3">
+                    <div key={item.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <img 
                         src={item.product.imageUrl} 
                         alt={item.product.title}
-                        className="w-16 h-20 object-contain rounded-lg"
+                        className="w-16 h-20 object-contain bg-gray-50 rounded-lg shadow-md"
                       />
                       <div className="flex-1">
-                        <h3 className="font-semibold text-sm">{item.product.title}</h3>
-                        <p className="text-xs text-gray-600">
+                        <h3 className="font-semibold text-gray-900 mb-1 text-sm">{item.product.title}</h3>
+                        <p className="text-xs text-gray-600 capitalize mb-1">
                           {item.product.type === 'audiobook' ? 'Audiolibro' : 
                            item.product.type === 'audio' ? 'Audio' : 
                            item.product.type === 'guide' ? 'Guía' : 'Script'}
                         </p>
+                        <p className="text-xs text-blue-600 font-medium">
+                          Cantidad: {item.quantity}
+                        </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold">{formatCurrency(item.product.price * item.quantity)}</p>
+                        <p className="font-bold text-base text-gray-900">
+                          {formatCurrency(item.product.price * item.quantity)}
+                        </p>
                       </div>
                     </div>
                   ))}
                   
-                  <div className="bg-blue-50 p-4 rounded-lg mt-4">
+                  <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200 mt-4">
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total:</span>
                       <span className="text-blue-600">{formatCurrency(total)}</span>
                     </div>
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      * Precios en pesos mexicanos (MXN)
+                    </p>
                   </div>
                 </CardContent>
               </Card>
+
+              {TestimonialsCarousel && testimonials && testimonials.length > 0 && (
+                <TestimonialsCarousel testimonials={testimonials} />
+              )}
             </div>
 
             <div>
-              {loading ? (
+              {error ? (
+                <div className="text-center py-8">
+                  <p className="text-red-600 mb-4">{error}</p>
+                  <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    Reintentar
+                  </Button>
+                </div>
+              ) : loading || !clientSecret ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="mt-4 text-gray-600">Preparando el pago...</p>
                 </div>
-              ) : error ? (
-                <div className="text-center py-8">
-                  <p className="text-red-600">{error}</p>
-                </div>
-              ) : clientSecret ? (
+              ) : (
                 <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <CheckoutForm total={total} />
+                  <CheckoutForm total={total} cartItems={cartItems} />
                 </Elements>
-              ) : null}
+              )}
             </div>
           </div>
         </div>
