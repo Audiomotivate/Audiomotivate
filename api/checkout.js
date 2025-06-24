@@ -1,5 +1,5 @@
-const { Pool } = require('@neondatabase/serverless');
-const Stripe = require('stripe');
+import { Pool } from '@neondatabase/serverless';
+import Stripe from 'stripe';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -11,7 +11,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
 });
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -59,4 +59,4 @@ module.exports = async (req, res) => {
       details: error.message 
     });
   }
-};
+}
