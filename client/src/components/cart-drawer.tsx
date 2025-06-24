@@ -44,11 +44,20 @@ export default function CartDrawer() {
   }, []);
 
   const updateQuantityMutation = useMutation({
-    mutationFn: async ({ itemId, quantity }: { itemId: number; quantity: number }) => {
-      const response = await fetch(`/api/cart/items/${itemId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity }),
+    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
+      let sessionId = localStorage.getItem('cart-session-id');
+      if (!sessionId) {
+        sessionId = 'browser-session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('cart-session-id', sessionId);
+      }
+      
+      const response = await fetch('/api/cart', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-session-id': sessionId
+        },
+        body: JSON.stringify({ productId, quantity }),
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to update quantity');
@@ -67,9 +76,18 @@ export default function CartDrawer() {
   });
 
   const removeItemMutation = useMutation({
-    mutationFn: async (itemId: number) => {
-      const response = await fetch(`/api/cart/items/${itemId}`, {
+    mutationFn: async (productId: number) => {
+      let sessionId = localStorage.getItem('cart-session-id');
+      if (!sessionId) {
+        sessionId = 'browser-session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('cart-session-id', sessionId);
+      }
+      
+      const response = await fetch(`/api/cart?productId=${productId}`, {
         method: 'DELETE',
+        headers: {
+          'x-session-id': sessionId
+        },
         credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to remove item');
@@ -149,7 +167,7 @@ export default function CartDrawer() {
                         variant="outline" 
                         size="sm"
                         onClick={() => updateQuantityMutation.mutate({ 
-                          itemId: item.id, 
+                          productId: item.product.id, 
                           quantity: Math.max(1, item.quantity - 1)
                         })}
                         disabled={item.quantity <= 1}
@@ -161,7 +179,7 @@ export default function CartDrawer() {
                         variant="outline" 
                         size="sm"
                         onClick={() => updateQuantityMutation.mutate({ 
-                          itemId: item.id, 
+                          productId: item.product.id, 
                           quantity: item.quantity + 1
                         })}
                       >
@@ -170,7 +188,7 @@ export default function CartDrawer() {
                       <Button 
                         variant="destructive" 
                         size="sm"
-                        onClick={() => removeItemMutation.mutate(item.id)}
+                        onClick={() => removeItemMutation.mutate(item.product.id)}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
