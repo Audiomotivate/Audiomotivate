@@ -1,7 +1,3 @@
-const { Pool } = require('@neondatabase/serverless');
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -24,31 +20,17 @@ module.exports = async function handler(req, res) {
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     
-    const { items, customerEmail, customerName } = req.body;
+    const { items } = req.body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'No items provided' });
     }
 
     const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
-    if (total <= 0) {
-      return res.status(400).json({ error: 'Invalid total amount' });
-    }
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(total * 100),
       currency: 'mxn',
-      metadata: {
-        customerEmail: customerEmail || '',
-        customerName: customerName || '',
-        items: JSON.stringify(items.map(item => ({
-          id: item.productId,
-          title: item.product.title,
-          quantity: item.quantity,
-          price: item.price
-        })))
-      },
       payment_method_options: {
         card: {
           setup_future_usage: null
@@ -57,8 +39,7 @@ module.exports = async function handler(req, res) {
     });
 
     return res.json({
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      clientSecret: paymentIntent.client_secret
     });
 
   } catch (error) {
