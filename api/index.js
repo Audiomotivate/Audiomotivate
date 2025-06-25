@@ -1,4 +1,4 @@
-// @vercel/node
+// @vercel/node - API CONSOLIDADA
 const { Pool, neonConfig } = require('@neondatabase/serverless');
 neonConfig.webSocketConstructor = require('ws');
 
@@ -11,7 +11,6 @@ function getSessionId(req) {
 }
 
 module.exports = async (req, res) => {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-session-id');
@@ -36,7 +35,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ADMIN PRODUCTS API
+    // ADMIN PRODUCTS API (GET, POST, PUT, DELETE)
     if (pathname === '/api/admin/products') {
       if (req.method === 'GET') {
         const result = await pool.query(`
@@ -54,6 +53,23 @@ module.exports = async (req, res) => {
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING *
         `, [title, price, imageUrl, previewUrl, downloadUrl, type, category, duration, rating, badge, isActive]);
         return res.status(201).json(result.rows[0]);
+      }
+      
+      if (req.method === 'PUT') {
+        const productId = url.searchParams.get('id');
+        const { title, price, imageUrl, previewUrl, downloadUrl, type, category, duration, rating, badge, isActive } = req.body;
+        const result = await pool.query(`
+          UPDATE products SET title=$1, price=$2, image_url=$3, preview_url=$4, download_url=$5, 
+                             type=$6, category=$7, duration=$8, rating=$9, badge=$10, is_active=$11
+          WHERE id=$12 RETURNING *
+        `, [title, price, imageUrl, previewUrl, downloadUrl, type, category, duration, rating, badge, isActive, productId]);
+        return res.status(200).json(result.rows[0]);
+      }
+      
+      if (req.method === 'DELETE') {
+        const productId = url.searchParams.get('id');
+        await pool.query('DELETE FROM products WHERE id = $1', [productId]);
+        return res.status(200).json({ success: true });
       }
     }
 
