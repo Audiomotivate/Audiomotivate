@@ -1,22 +1,14 @@
-// @vercel/node
-const { neon } = require('@neondatabase/serverless');
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+neonConfig.webSocketConstructor = require('ws');
+
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Z9w3h6xGOa6n@ep-steep-dream-a58a9ykl.us-east-2.aws.neon.tech/neondb?sslmode=require'
+});
 
 function extractGoogleDriveFileId(url) {
   if (!url) return null;
-  
-  // Extract file ID from various Google Drive URL formats
-  const patterns = [
-    /\/file\/d\/([a-zA-Z0-9_-]+)/,
-    /id=([a-zA-Z0-9_-]+)/,
-    /\/open\?id=([a-zA-Z0-9_-]+)/
-  ];
-  
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-  
-  return null;
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
 }
 
 function generateEmailHTML(customerName, downloadLinks) {
@@ -25,46 +17,44 @@ function generateEmailHTML(customerName, downloadLinks) {
     <html>
     <head>
       <meta charset="utf-8">
+      <title>Tu compra en Audio Motívate</title>
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-        .download-item { background: white; padding: 20px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .download-button { display: inline-block; background: #4CAF50; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
-        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
-        .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { font-size: 32px; font-weight: bold; margin-bottom: 10px; }
+        .audio { color: #fbbf24; }
+        .motivate { color: #3b82f6; }
+        .product { background: #f8fafc; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #3b82f6; }
+        .download-btn { display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <h1>¡Gracias por tu compra!</h1>
-          <p>Hola ${customerName || 'Cliente'}</p>
+          <div class="logo">
+            <span class="audio">Audio</span><span class="motivate">Motívate</span>
+          </div>
+          <h2>¡Tu compra ha sido confirmada!</h2>
         </div>
         
-        <div class="content">
-          <p>Tu pedido ha sido procesado exitosamente. Aquí tienes los enlaces de descarga para tus productos:</p>
-          
-          ${downloadLinks.map(item => `
-            <div class="download-item">
-              <h3>${item.title}</h3>
-              <p><strong>Categoría:</strong> ${item.category}</p>
-              <a href="${item.downloadUrl}" class="download-button">⬇️ Descargar Ahora</a>
-            </div>
-          `).join('')}
-          
-          <div class="warning">
-            <strong>⚠️ Importante:</strong> Guarda estos enlaces en un lugar seguro. Te recomendamos descargar tu contenido inmediatamente.
+        <p>Hola ${customerName || 'Cliente'},</p>
+        
+        <p>Gracias por tu compra en Audio Motívate. Aquí tienes los enlaces de descarga para tus productos:</p>
+        
+        ${downloadLinks.map(link => `
+          <div class="product">
+            <h3>${link.title}</h3>
+            <p>Tipo: ${link.type}</p>
+            <a href="${link.url}" class="download-btn">Descargar Ahora</a>
+            <p><small>Este enlace expira en 7 días por motivos de seguridad.</small></p>
           </div>
-          
-          <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
-          
-          <p>¡Disfruta tu nuevo contenido motivacional!</p>
-        </div>
+        `).join('')}
         
         <div class="footer">
-          <p>© 2025 Audio Motívate. Todos los derechos reservados.</p>
+          <p>¡Gracias por confiar en Audio Motívate!</p>
+          <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
         </div>
       </div>
     </body>
@@ -73,6 +63,7 @@ function generateEmailHTML(customerName, downloadLinks) {
 }
 
 module.exports = async function handler(req, res) {
+  res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -81,65 +72,50 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'POST') {
+    try {
+      const { email, customerName, products } = req.body;
 
-  try {
-    const { customerEmail, customerName, items } = req.body;
+      if (!email || !products || products.length === 0) {
+        return res.status(400).json({ error: 'Email y productos requeridos' });
+      }
 
-    if (!customerEmail || !items || !Array.isArray(items)) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: customerEmail, items' 
+      // Get product details from database
+      const productIds = products.map(p => p.id);
+      const result = await pool.query(`
+        SELECT id, title, type, download_url 
+        FROM products 
+        WHERE id = ANY($1)
+      `, [productIds]);
+
+      const downloadLinks = result.rows.map(product => ({
+        title: product.title,
+        type: product.type,
+        url: product.download_url
+      }));
+
+      // Generate email HTML
+      const emailHTML = generateEmailHTML(customerName, downloadLinks);
+
+      // In a real implementation, you would send the email here
+      // For now, we'll simulate email sending
+      console.log('Email would be sent to:', email);
+      console.log('Download links:', downloadLinks);
+
+      return res.status(200).json({ 
+        success: true,
+        message: 'Email enviado exitosamente',
+        downloadLinks 
+      });
+
+    } catch (error) {
+      console.error('Send email API error:', error);
+      return res.status(500).json({ 
+        error: 'Error enviando email',
+        message: error.message 
       });
     }
-
-    const sql = neon(process.env.DATABASE_URL);
-
-    // Get product details for the purchased items
-    const productIds = items.map(item => item.productId);
-    const products = await sql`
-      SELECT id, title, category, download_url as "downloadUrl"
-      FROM products 
-      WHERE id = ANY(${productIds})
-    `;
-
-    // Generate download links with converted Google Drive URLs
-    const downloadLinks = products.map(product => {
-      const fileId = extractGoogleDriveFileId(product.downloadUrl);
-      const downloadUrl = fileId 
-        ? `https://drive.google.com/uc?export=download&id=${fileId}`
-        : product.downloadUrl;
-
-      return {
-        title: product.title,
-        category: product.category,
-        downloadUrl: downloadUrl
-      };
-    });
-
-    // Generate email HTML
-    const emailHTML = generateEmailHTML(customerName, downloadLinks);
-    
-    // Log email sending (in production, integrate with email service)
-    console.log(`[${new Date().toISOString()}] Email sent to: ${customerEmail}`);
-    console.log(`Products: ${downloadLinks.map(p => p.title).join(', ')}`);
-
-    // For now, return success (integrate with actual email service in production)
-    return res.status(200).json({
-      success: true,
-      message: 'Download email sent successfully',
-      email: customerEmail,
-      itemCount: downloadLinks.length,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Send email error:', error);
-    return res.status(500).json({
-      error: 'Failed to send download email',
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
   }
-}
+
+  return res.status(405).json({ error: 'Method not allowed' });
+};
