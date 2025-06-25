@@ -1,27 +1,14 @@
 {
-  "version": 2,
   "builds": [
     {
-      "src": "api/index.js",
+      "src": "api/*.js",
       "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "installCommand": "npm install",
-        "buildCommand": "npx vite build",
-        "outputDirectory": "dist/public"
-      }
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/index.js"
-    },
-    {
-      "handle": "filesystem"
+      "dest": "/api/$1"
     },
     {
       "src": "/(.*)",
