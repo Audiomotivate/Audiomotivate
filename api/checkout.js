@@ -1,4 +1,5 @@
-export default async function handler(req, res) {
+// @vercel/node
+module.exports = async function handler(req, res) {
   // CORS headers optimizados para Vercel
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -14,121 +15,60 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Parsing robusto del body para Vercel
-    let body = req.body;
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body);
-      } catch (parseError) {
-        return res.status(400).json({ error: 'Invalid JSON in request body' });
-      }
-    }
-
-    if (!body) {
-      return res.status(400).json({ error: 'Request body is required' });
-    }
-
-    const { amount, currency = 'mxn' } = body;
-    
-    // Validación estricta para evitar errores de Stripe
-    if (!amount) {
-      return res.status(400).json({ error: 'Amount is required' });
-    }
-    
-    if (typeof amount !== 'number' || amount <= 0 || !isFinite(amount)) {
-      return res.status(400).json({ 
-        error: 'Amount must be a positive finite number',
-        received: { amount, type: typeof amount }
-      });
-    }
-
-    // Verificación de variables de entorno en Vercel
-    if (!process.env.STRIPE_SECRET_KEY) {
-      console.error('STRIPE_SECRET_KEY not found in Vercel environment variables');
-      return res.status(500).json({ 
-        error: 'Payment system not configured in production environment'
-      });
-    }
-
-    // Log para debugging en Vercel
-    console.log(`[${new Date().toISOString()}] Processing payment: ${amount} ${currency}`);
-
-    // Import dinámico optimizado para Vercel serverless
+    // Importación dinámica de Stripe para Vercel
     const Stripe = (await import('stripe')).default;
     
-    // Inicialización de Stripe con configuración para producción
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY not configured');
+    }
+
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
       apiVersion: '2023-10-16',
-      typescript: false, // Mejor compatibilidad en Vercel
     });
 
-    // Configuración mínima y estable para Vercel
-    const paymentIntentParams = {
-      amount: Math.round(amount), // Asegura que sea entero
-      currency: currency.toLowerCase(),
-      payment_method_types: ['card'],
+    const { amount, currency = 'mxn', customerEmail, customerName, items } = req.body;
+
+    console.log('[CHECKOUT] Processing payment:', { amount, currency, customerEmail, itemCount: items?.length });
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid amount',
+        received: amount
+      });
+    }
+
+    // Crear PaymentIntent con configuración simplificada (solo tarjetas)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convertir a centavos
+      currency: currency,
       automatic_payment_methods: {
-        enabled: false
+        enabled: true,
+        allow_redirects: 'never' // Solo tarjetas, sin redirects
+      },
+      setup_future_usage: null, // No guardar tarjetas
+      metadata: {
+        customerEmail: customerEmail || 'no-email',
+        customerName: customerName || 'no-name',
+        itemCount: items?.length || 0,
+        timestamp: new Date().toISOString()
       }
-    };
+    });
 
-    console.log(`[${new Date().toISOString()}] Creating Stripe payment intent`);
+    console.log('[CHECKOUT] PaymentIntent created:', paymentIntent.id);
 
-    // Crear payment intent con timeout para Vercel
-    const paymentIntent = await Promise.race([
-      stripe.paymentIntents.create(paymentIntentParams),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Stripe API timeout')), 25000)
-      )
-    ]);
-    
-    console.log(`[${new Date().toISOString()}] Payment intent created: ${paymentIntent.id}`);
-    
-    // Respuesta optimizada para Vercel
-    return res.status(200).json({ 
+    return res.status(200).json({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
-      amount: paymentIntent.amount,
-      currency: paymentIntent.currency,
+      amount: amount,
+      currency: currency.toUpperCase(),
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
-    // Logging detallado para Vercel Functions
-    console.error(`[${new Date().toISOString()}] Checkout API Error:`, {
+    console.error('[CHECKOUT] Error:', error);
+    return res.status(500).json({
+      error: 'Payment processing failed',
       message: error.message,
-      type: error.type || 'UnknownError',
-      code: error.code || 'NO_CODE',
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-
-    // Manejo específico de errores de Stripe en Vercel
-    if (error.type === 'StripeAuthenticationError') {
-      return res.status(401).json({
-        error: 'Stripe authentication failed',
-        code: 'STRIPE_AUTH_ERROR'
-      });
-    }
-
-    if (error.type === 'StripeInvalidRequestError') {
-      return res.status(400).json({
-        error: 'Invalid payment parameters',
-        details: error.message,
-        code: 'STRIPE_INVALID_REQUEST'
-      });
-    }
-
-    if (error.message === 'Stripe API timeout') {
-      return res.status(504).json({
-        error: 'Payment service timeout',
-        code: 'STRIPE_TIMEOUT'
-      });
-    }
-
-    // Error genérico para producción
-    return res.status(500).json({ 
-      error: 'Payment initialization failed',
-      code: 'PAYMENT_ERROR',
       timestamp: new Date().toISOString()
     });
   }
