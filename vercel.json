@@ -1,47 +1,17 @@
 {
-  "version": 2,
   "builds": [
     {
-      "src": "client/**/*",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
+      }
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/client/$1"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  ],
-  "functions": {
-    "api/checkout.js": {
-      "maxDuration": 30
-    },
-    "api/send-download-email.js": {
-      "maxDuration": 30
-    },
-    "api/cart.js": {
-      "maxDuration": 15
-    },
-    "api/products.js": {
-      "maxDuration": 15
-    },
-    "api/products/[id].js": {
-      "maxDuration": 15
-    }
-  },
-  "env": {
-    "DATABASE_URL": "@database-url",
-    "STRIPE_SECRET_KEY": "@stripe-secret-key",
-    "VITE_STRIPE_PUBLIC_KEY": "@vite-stripe-public-key",
-    "EMAIL_USER": "@email-user",
-    "EMAIL_PASS": "@email-pass"
-  }
+  ]
 }
