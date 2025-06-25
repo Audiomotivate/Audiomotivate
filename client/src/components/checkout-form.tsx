@@ -1,252 +1,208 @@
 import React, { useState } from 'react';
-import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
-import { useLocation } from 'wouter';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { CheckCircle, Shield, Mail, User } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { useToast } from '../hooks/use-toast';
 import { useCart } from '../providers/cart-provider';
+import { useMutation } from '@tanstack/react-query';
+import { apiRequest } from '../lib/queryClient';
+import { useLocation } from 'wouter';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 
 interface CheckoutFormProps {
   clientSecret: string;
-  total: number;
-  processing: boolean;
-  setProcessing: (processing: boolean) => void;
 }
 
-export default function CheckoutForm({ clientSecret, total, processing, setProcessing }: CheckoutFormProps) {
+const CheckoutForm: React.FC<CheckoutFormProps> = ({ clientSecret }) => {
   const stripe = useStripe();
   const elements = useElements();
-  const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const { clearCart } = useCart();
-  const [message, setMessage] = useState('');
-  const [step, setStep] = useState('');
+  const [, setLocation] = useLocation();
   const [customerInfo, setCustomerInfo] = useState({
-    firstName: '',
-    lastName: '',
+    name: '',
     email: ''
   });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [step, setStep] = useState<'form' | 'processing' | 'finalizing'>('form');
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
     if (!stripe || !elements) {
       return;
     }
 
-    if (!customerInfo.firstName || !customerInfo.lastName || !customerInfo.email) {
-      setMessage('Por favor completa todos los campos requeridos');
+    if (!customerInfo.name || !customerInfo.email) {
+      toast({
+        title: "Información requerida",
+        description: "Por favor completa tu nombre y email",
+        variant: "destructive"
+      });
       return;
     }
 
-    setProcessing(true);
-    setMessage('');
+    setIsProcessing(true);
+    setStep('processing');
 
     try {
-      // Step-by-step feedback
-      setStep('Verificando compra...');
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Step 1: Verificando compra
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      setStep('Preparando acceso...');
-      await new Promise(resolve => setTimeout(resolve, 600));
+      // Step 2: Processing payment
+      setStep('finalizing');
       
-      setStep('Finalizando...');
-
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/order-success`,
-          payment_method_data: {
-            billing_details: {
-              name: `${customerInfo.firstName} ${customerInfo.lastName}`,
-              email: customerInfo.email,
-            },
-          },
+          receipt_email: customerInfo.email,
         },
-        redirect: 'if_required',
+        redirect: 'if_required'
       });
 
       if (error) {
-        setMessage(error.message || 'Error en el pago');
-        setProcessing(false);
-        setStep('');
-      } else {
-        // Payment successful
-        setStep('¡Completado!');
-        setMessage('¡Pago exitoso! Preparando tu contenido...');
+        toast({
+          title: "Error en el pago",
+          description: error.message,
+          variant: "destructive"
+        });
+        setIsProcessing(false);
+        setStep('form');
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        // Clear cart immediately for smooth transition
+        clearCart();
         
-        // Clear cart and redirect
-        await clearCart();
+        // Brief delay for smooth UX
+        await new Promise(resolve => setTimeout(resolve, 800));
         
-        setTimeout(() => {
-          const customerName = encodeURIComponent(`${customerInfo.firstName} ${customerInfo.lastName}`);
-          setLocation(`/order-success?name=${customerName}&email=${encodeURIComponent(customerInfo.email)}`);
-        }, 1000);
+        // Navigate to success page
+        setLocation('/order-success');
       }
-    } catch (err) {
-      console.error('Error en checkout:', err);
-      setMessage('Error inesperado. Por favor intenta nuevamente.');
-      setProcessing(false);
-      setStep('');
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast({
+        title: "Error en el pago",
+        description: "Hubo un problema procesando tu pago. Por favor intenta de nuevo.",
+        variant: "destructive"
+      });
+      setIsProcessing(false);
+      setStep('form');
+    }
+  };
+
+  const getStepText = () => {
+    switch (step) {
+      case 'processing':
+        return 'Verificando compra...';
+      case 'finalizing':
+        return 'Preparando acceso...';
+      default:
+        return '';
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Customer Information */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="w-5 h-5 text-blue-600" />
-            Información Personal
-          </CardTitle>
+          <CardTitle>Información de contacto</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre *
-              </label>
-              <input 
-                type="text" 
-                required
-                value={customerInfo.firstName}
-                onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Tu nombre"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Apellido *
-              </label>
-              <input 
-                type="text" 
-                required
-                value={customerInfo.lastName}
-                onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Tu apellido"
-              />
-            </div>
-          </div>
-          
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Mail className="w-4 h-4 inline mr-1" />
-              Email *
-            </label>
-            <input 
-              type="email" 
+            <Label htmlFor="name">Nombre completo</Label>
+            <Input
+              id="name"
+              value={customerInfo.name}
+              onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })}
+              placeholder="Tu nombre completo"
               required
-              value={customerInfo.email}
-              onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="tu@email.com"
+              disabled={isProcessing}
             />
-            <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-700 font-medium flex items-center">
-                <Mail className="w-4 h-4 mr-2" />
-                Recibirás instantáneamente el enlace de descarga en este correo
-              </p>
-            </div>
+          </div>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={customerInfo.email}
+              onChange={(e) => setCustomerInfo({ ...customerInfo, email: e.target.value })}
+              placeholder="tu@email.com"
+              required
+              disabled={isProcessing}
+            />
           </div>
         </CardContent>
       </Card>
 
-      {/* Payment Information */}
       <Card>
         <CardHeader>
-          <CardTitle>Información de Pago</CardTitle>
-          <p className="text-sm text-gray-600">
-            Solo necesitas tu tarjeta. Sin cuentas adicionales requeridas.
-          </p>
+          <CardTitle>Información de pago</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Información de la tarjeta
-            </label>
-            <div className="p-4 border border-gray-300 rounded-lg bg-white">
-              <PaymentElement 
-                options={{
-                  layout: 'tabs',
-                  paymentMethodOrder: ['card'],
-                  fields: {
-                    billingDetails: 'never'
-                  },
-                  terms: {
-                    card: 'never'
-                  },
-                  wallets: {
-                    applePay: 'never',
-                    googlePay: 'never'
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {(message || step) && (
-            <div className={`p-4 rounded-lg text-sm font-medium ${
-              message.includes('exitoso') || step === '¡Completado!'
-                ? 'bg-green-100 text-green-800 border border-green-200' 
-                : message.includes('Error')
-                ? 'bg-red-100 text-red-800 border border-red-200'
-                : 'bg-blue-100 text-blue-800 border border-blue-200'
-            }`}>
-              {step && (
-                <div className="flex items-center">
-                  {step === '¡Completado!' ? (
-                    <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                  ) : (
-                    <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
-                  )}
-                  {step}
-                </div>
-              )}
-              {message && <div className="mt-1">{message}</div>}
-            </div>
-          )}
-
-          {/* Order Total */}
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-lg border border-blue-200">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-2">Total a pagar</p>
-              <p className="text-3xl font-bold text-blue-600">${total.toFixed(2)} MXN</p>
-            </div>
-          </div>
-          
-          <Button
-            type="submit"
-            disabled={!stripe || processing || !customerInfo.email}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg"
-            size="lg"
-          >
-            {processing ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                {step || 'Procesando Pago...'}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center">
-                <Shield className="w-5 h-5 mr-2" />
-                Completar Compra Segura
-              </div>
-            )}
-          </Button>
-
-          <div className="text-center space-y-2">
-            <div className="flex items-center justify-center text-xs text-gray-500">
-              <Shield className="w-3 h-3 mr-1" />
-              <span>Pago 100% seguro procesado por Stripe</span>
-            </div>
-            <div className="flex items-center justify-center text-xs text-gray-500">
-              <CheckCircle className="w-3 h-3 mr-1" />
-              <span>Entrega instantánea por email</span>
-            </div>
-          </div>
+        <CardContent>
+          <PaymentElement 
+            options={{
+              layout: 'accordion',
+              defaultValues: {
+                billingDetails: {
+                  name: customerInfo.name,
+                  email: customerInfo.email
+                }
+              },
+              terms: {
+                card: 'never'
+              }
+            }}
+          />
         </CardContent>
       </Card>
+
+      <Button 
+        type="submit" 
+        className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-3"
+        disabled={!stripe || isProcessing}
+      >
+        {isProcessing ? (
+          <div className="flex items-center justify-center space-x-2">
+            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+            <span>{getStepText()}</span>
+          </div>
+        ) : (
+          'Completar compra'
+        )}
+      </Button>
     </form>
   );
-}
+};
+
+const CheckoutFormWrapper: React.FC<CheckoutFormProps> = ({ clientSecret }) => {
+  if (!clientSecret) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="animate-spin w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
+  return (
+    <Elements 
+      stripe={stripePromise} 
+      options={{ 
+        clientSecret,
+        appearance: {
+          theme: 'stripe',
+          variables: {
+            colorPrimary: '#EAB308',
+          }
+        }
+      }}
+    >
+      <CheckoutForm clientSecret={clientSecret} />
+    </Elements>
+  );
+};
+
+export default CheckoutFormWrapper;
