@@ -1,10 +1,11 @@
+// @vercel/node
 const { neon } = require('@neondatabase/serverless');
 
 function getSessionId(req) {
   return req.headers['x-session-id'] || 'anonymous';
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-session-id');
@@ -18,17 +19,23 @@ export default async function handler(req, res) {
     const sessionId = getSessionId(req);
 
     if (req.method === 'GET') {
-      const cartItems = await sql`
+      // Obtener items del carrito con información del producto
+      const items = await sql`
         SELECT 
-          ci.id, ci.product_id as "productId", ci.quantity,
-          p.id as "product.id", p.title as "product.title", 
-          p.price as "product.price", p.image_url as "product.imageUrl"
+          ci.id,
+          ci.product_id as "productId",
+          ci.quantity,
+          p.id as "product.id",
+          p.title as "product.title",
+          p.price as "product.price",
+          p.image_url as "product.imageUrl"
         FROM cart_items ci
+        JOIN carts c ON ci.cart_id = c.id
         JOIN products p ON ci.product_id = p.id
-        WHERE ci.session_id = ${sessionId}
+        WHERE c.session_id = ${sessionId}
       `;
 
-      const items = cartItems.map(item => ({
+      const formattedItems = items.map(item => ({
         id: item.id,
         productId: item.productId,
         quantity: item.quantity,
@@ -43,7 +50,7 @@ export default async function handler(req, res) {
       const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
 
       return res.json({
-        items,
+        items: formattedItems,
         total,
         isOpen: false
       });
