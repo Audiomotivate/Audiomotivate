@@ -54,24 +54,22 @@ export default async function handler(req, res) {
       typescript: false,
     });
 
-    // CONFIGURACIÓN SOLO TARJETA - SIN LINK NI GUARDAR DATOS
     const paymentIntentParams = {
       amount: Math.round(amount),
       currency: currency.toLowerCase(),
-      payment_method_types: ['card'], // SOLO tarjetas
+      payment_method_types: ['card'],
       automatic_payment_methods: {
-        enabled: false // NO métodos automáticos
+        enabled: false
       },
       payment_method_options: {
         card: {
-          setup_future_usage: null, // NO guardar para uso futuro
+          setup_future_usage: null,
           request_three_d_secure: 'automatic'
         }
       },
       metadata: {
         disable_link: 'true',
-        payment_mode: 'card_only',
-        no_save_payment_method: 'true'
+        payment_mode: 'card_only'
       }
     };
 
@@ -98,7 +96,8 @@ export default async function handler(req, res) {
     console.error(`[${new Date().toISOString()}] Checkout API Error:`, {
       message: error.message,
       type: error.type || 'UnknownError',
-      code: error.code || 'NO_CODE'
+      code: error.code || 'NO_CODE',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
 
     if (error.type === 'StripeAuthenticationError') {
