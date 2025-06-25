@@ -7,7 +7,6 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Hardcoded data to ensure immediate functionality
   const products = [
     {
       "id": 3,
@@ -47,19 +46,6 @@ module.exports = async function handler(req, res) {
       "downloadUrl": "https://drive.google.com/file/d/example3",
       "isActive": true,
       "badge": "Nuevo"
-    },
-    {
-      "id": 1001,
-      "title": "Script de Afirmaciones Diarias",
-      "price": 7.50,
-      "imageUrl": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=300&h=400&fit=crop",
-      "category": "script",
-      "duration": "PDF",
-      "rating": 4.9,
-      "description": "Script poderoso de afirmaciones para uso diario",
-      "downloadUrl": "https://drive.google.com/file/d/example4",
-      "isActive": true,
-      "badge": null
     }
   ];
 
