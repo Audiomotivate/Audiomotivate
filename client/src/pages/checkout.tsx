@@ -108,6 +108,7 @@ export default function CheckoutBasic() {
               <div>Stripe Key: {STRIPE_PUBLIC_KEY ? 'Configured' : 'Missing'}</div>
               <div>Build: {new Date().toISOString()}</div>
               <div>Environment: Production</div>
+              <div>Version: 2.0</div>
             </div>
           </div>
         </div>
