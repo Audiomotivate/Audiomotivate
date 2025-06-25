@@ -1,10 +1,16 @@
 // @vercel/node
-module.exports = async function handler(req, res) {
-  // CORS headers optimizados para Vercel
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+neonConfig.webSocketConstructor = require('ws');
+
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Z9w3h6xGOa6n@ep-steep-dream-a58a9ykl.us-east-2.aws.neon.tech/neondb?sslmode=require'
+});
+
+module.exports = async (req, res) => {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -15,61 +21,46 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // Importación dinámica de Stripe para Vercel
-    const Stripe = (await import('stripe')).default;
+    // Dynamic import for Stripe
+    const Stripe = require('stripe');
     
     if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('STRIPE_SECRET_KEY not configured');
+      console.error('STRIPE_SECRET_KEY not configured');
+      return res.status(500).json({ error: 'Payment system not configured' });
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2023-10-16',
-    });
-
-    const { amount, currency = 'mxn', customerEmail, customerName, items } = req.body;
-
-    console.log('[CHECKOUT] Processing payment:', { amount, currency, customerEmail, itemCount: items?.length });
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    
+    const { amount, currency = 'mxn', cartItems = [] } = req.body;
 
     if (!amount || amount <= 0) {
-      return res.status(400).json({ 
-        error: 'Invalid amount',
-        received: amount
-      });
+      return res.status(400).json({ error: 'Invalid amount' });
     }
 
-    // Crear PaymentIntent con configuración simplificada (solo tarjetas)
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convertir a centavos
-      currency: currency,
+      amount: Math.round(amount),
+      currency: currency.toLowerCase(),
       automatic_payment_methods: {
         enabled: true,
-        allow_redirects: 'never' // Solo tarjetas, sin redirects
+        allow_redirects: 'never'
       },
-      setup_future_usage: null, // No guardar tarjetas
+      setup_future_usage: null,
       metadata: {
-        customerEmail: customerEmail || 'no-email',
-        customerName: customerName || 'no-name',
-        itemCount: items?.length || 0,
+        cart_items: JSON.stringify(cartItems),
         timestamp: new Date().toISOString()
       }
     });
 
-    console.log('[CHECKOUT] PaymentIntent created:', paymentIntent.id);
-
     return res.status(200).json({
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
-      amount: amount,
-      currency: currency.toUpperCase(),
-      timestamp: new Date().toISOString()
+      paymentIntentId: paymentIntent.id
     });
 
   } catch (error) {
-    console.error('[CHECKOUT] Error:', error);
-    return res.status(500).json({
+    console.error('Checkout API Error:', error);
+    return res.status(500).json({ 
       error: 'Payment processing failed',
-      message: error.message,
-      timestamp: new Date().toISOString()
+      details: error.message 
     });
   }
-}
+};
