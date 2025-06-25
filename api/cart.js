@@ -1,4 +1,3 @@
-// @vercel/node
 const { Pool, neonConfig } = require('@neondatabase/serverless');
 neonConfig.webSocketConstructor = require('ws');
 
@@ -10,12 +9,12 @@ function getSessionId(req) {
   return req.headers['x-session-id'] || 'anonymous';
 }
 
-module.exports = async (req, res) => {
-  // CORS headers
+module.exports = async function handler(req, res) {
+  res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-session-id');
-  
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-session-id');
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -24,49 +23,47 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'GET') {
-      // Get cart with items and product details
-      const cartQuery = `
-        SELECT 
-          ci.id,
-          ci.product_id as "productId",
-          ci.quantity,
-          p.id as "product.id",
-          p.title as "product.title",
-          p.price as "product.price",
-          p.image_url as "product.imageUrl"
+      const result = await pool.query(`
+        SELECT ci.id, ci.quantity, ci.product_id,
+               p.title, p.price, p.image_url
         FROM cart_items ci
-        JOIN carts c ON ci.cart_id = c.id
         JOIN products p ON ci.product_id = p.id
-        WHERE c.session_id = $1
-      `;
-      
-      const result = await pool.query(cartQuery, [sessionId]);
-      
-      // Transform flat rows to nested structure
-      const items = result.rows.map(row => ({
-        id: row.id,
-        productId: row.productId,
-        quantity: row.quantity,
+        WHERE ci.session_id = $1
+      `, [sessionId]);
+
+      const items = result.rows.map(item => ({
+        id: item.id,
+        productId: item.product_id,
+        quantity: item.quantity,
         product: {
-          id: row['product.id'],
-          title: row['product.title'],
-          price: row['product.price'],
-          imageUrl: row['product.imageUrl']
+          id: item.product_id,
+          title: item.title,
+          price: item.price,
+          imageUrl: item.image_url
         }
       }));
-      
+
       const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-      
+
       return res.status(200).json({
         items,
         total,
-        isOpen: false
+        count: items.length
       });
     }
-    
+
+    if (req.method === 'DELETE') {
+      await pool.query('DELETE FROM cart_items WHERE session_id = $1', [sessionId]);
+      return res.status(200).json({ success: true });
+    }
+
     return res.status(405).json({ error: 'Method not allowed' });
+
   } catch (error) {
-    console.error('Cart API Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Cart API error:', error);
+    return res.status(500).json({ 
+      error: 'Database error',
+      message: error.message 
+    });
   }
 };
