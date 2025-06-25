@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
 
-export default function CheckoutBasic() {
+export default function Checkout() {
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState('');
 
@@ -51,7 +51,7 @@ export default function CheckoutBasic() {
           marginBottom: '24px',
           fontSize: '28px'
         }}>
-          Checkout - En Construcción
+          Checkout Debug v3.1
         </h1>
 
         <div style={{
@@ -108,7 +108,8 @@ export default function CheckoutBasic() {
               <div>Stripe Key: {STRIPE_PUBLIC_KEY ? 'Configured' : 'Missing'}</div>
               <div>Build: {new Date().toISOString()}</div>
               <div>Environment: Production</div>
-              <div>Version: 2.0</div>
+              <div>Version: 3.1 - FORCED UPDATE</div>
+              <div>Timestamp: {Date.now()}</div>
             </div>
           </div>
         </div>
