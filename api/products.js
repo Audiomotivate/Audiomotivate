@@ -2,98 +2,73 @@ const { Pool } = require('@neondatabase/serverless');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-module.exports = async (req, res) => {
+function convertGoogleDriveUrl(url) {
+  if (!url) return url;
+  
+  if (url.includes('thumbnail')) return url;
+  
+  if (url.includes('drive.google.com/file/d/')) {
+    const fileIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch) {
+      return `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w300-h400`;
+    }
+  }
+  
+  if (url.includes('lh3.googleusercontent.com')) return url;
+  
+  return url;
+}
+
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const { id } = req.query;
-  console.log(`${req.method} /api/products - ID: ${id || 'all'}`);
-
   try {
-    if (req.method === 'GET') {
-      if (id) {
-        // Get single product by ID - convert to integer for proper query
-        const productId = parseInt(id, 10);
-        
-        if (isNaN(productId)) {
-          return res.status(400).json({ error: 'Invalid product ID' });
-        }
-        
-        const result = await pool.query(`
-          SELECT 
-            id,
-            title,
-            description,
-            type,
-            category,
-            price,
-            image_url as "imageUrl",
-            duration,
-            is_active as "isActive",
-            badge,
-            download_url as "downloadUrl",
-            preview_url as "previewUrl",
-            is_bestseller as "isBestseller",
-            is_new as "isNew",
-            created_at as "createdAt",
-            updated_at as "updatedAt"
-          FROM products 
-          WHERE id = $1 AND is_active = true
-        `, [productId]);
-        
-        console.log(`Query result for ID ${productId}:`, result.rows.length, 'rows');
-        
-        if (result.rows.length === 0) {
-          console.log(`Product ${productId} not found`);
-          return res.status(404).json({ error: 'Product not found' });
-        }
-        
-        console.log(`Found product ${productId}:`, result.rows[0].title);
-        return res.json(result.rows[0]);
-        
-      } else {
-        // Get all active products
-        const result = await pool.query(`
-          SELECT 
-            id,
-            title,
-            description,
-            type,
-            category,
-            price,
-            image_url as "imageUrl",
-            duration,
-            is_active as "isActive",
-            badge,
-            download_url as "downloadUrl",
-            preview_url as "previewUrl",
-            is_bestseller as "isBestseller",
-            is_new as "isNew",
-            created_at as "createdAt",
-            updated_at as "updatedAt"
-          FROM products 
-          WHERE is_active = true
-          ORDER BY created_at DESC
-        `);
-        
-        console.log(`Found ${result.rows.length} active products`);
-        return res.json(result.rows);
+    const { id } = req.query;
+    
+    if (id) {
+      const result = await pool.query(`
+        SELECT 
+          id, title, price, image_url as "imageUrl", category, duration,
+          rating, description, download_url as "downloadUrl", is_active as "isActive", badge
+        FROM products 
+        WHERE id = $1 AND is_active = true
+      `, [id]);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Product not found' });
       }
       
+      const product = result.rows[0];
+      product.imageUrl = convertGoogleDriveUrl(product.imageUrl);
+      
+      return res.json(product);
+      
     } else {
-      return res.status(405).json({ error: 'Method not allowed' });
+      const result = await pool.query(`
+        SELECT 
+          id, title, price, image_url as "imageUrl", category, duration,
+          rating, description, download_url as "downloadUrl", is_active as "isActive", badge
+        FROM products 
+        WHERE is_active = true
+        ORDER BY id ASC
+      `);
+      
+      const products = result.rows.map(product => ({
+        ...product,
+        imageUrl: convertGoogleDriveUrl(product.imageUrl)
+      }));
+      
+      return res.json(products);
     }
     
   } catch (error) {
     console.error('Database error:', error);
-    return res.status(500).json({ 
-      error: 'Database operation failed',
-      details: error.message 
-    });
+    return res.status(500).json({ error: 'Database connection failed' });
   }
 };
