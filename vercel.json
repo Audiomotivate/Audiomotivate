@@ -1,10 +1,8 @@
 {
-  "functions": {
-    "api/*.js": {
-      "runtime": "@vercel/node@20"
-    },
-    "api/admin/*.js": {
-      "runtime": "@vercel/node@20"
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  }
+  ]
 }
