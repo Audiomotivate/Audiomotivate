@@ -1,3 +1,4 @@
+// @vercel/node
 const { neon } = require('@neondatabase/serverless');
 
 function extractGoogleDriveFileId(url) {
@@ -48,22 +49,22 @@ function generateEmailHTML(customerName, downloadLinks) {
           ${downloadLinks.map(item => `
             <div class="download-item">
               <h3>${item.title}</h3>
-              <p>Categoría: ${item.category}</p>
-              <a href="${item.downloadUrl}" class="download-button">Descargar Ahora</a>
+              <p><strong>Categoría:</strong> ${item.category}</p>
+              <a href="${item.downloadUrl}" class="download-button">⬇️ Descargar Ahora</a>
             </div>
           `).join('')}
           
           <div class="warning">
-            <strong>⚠️ Importante:</strong> Estos enlaces tienen una validez de 7 días. Te recomendamos descargar tus archivos lo antes posible.
+            <strong>⚠️ Importante:</strong> Guarda estos enlaces en un lugar seguro. Te recomendamos descargar tu contenido inmediatamente.
           </div>
           
-          <p>Si tienes alguna pregunta o problema con las descargas, no dudes en contactarnos.</p>
+          <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
           
-          <p>¡Gracias por elegir Audio Motívate!</p>
+          <p>¡Disfruta tu nuevo contenido motivacional!</p>
         </div>
         
         <div class="footer">
-          <p>© ${new Date().getFullYear()} Audio Motívate - Transformando vidas a través del audio</p>
+          <p>© 2025 Audio Motívate. Todos los derechos reservados.</p>
         </div>
       </div>
     </body>
@@ -71,7 +72,7 @@ function generateEmailHTML(customerName, downloadLinks) {
   `;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -94,20 +95,16 @@ export default async function handler(req, res) {
     }
 
     const sql = neon(process.env.DATABASE_URL);
-    
+
     // Get product details for the purchased items
-    const productIds = items.map(item => item.productId || item.id);
+    const productIds = items.map(item => item.productId);
     const products = await sql`
       SELECT id, title, category, download_url as "downloadUrl"
       FROM products 
       WHERE id = ANY(${productIds})
     `;
 
-    if (products.length === 0) {
-      return res.status(404).json({ error: 'No products found' });
-    }
-
-    // Prepare download links with time-limited access
+    // Generate download links with converted Google Drive URLs
     const downloadLinks = products.map(product => {
       const fileId = extractGoogleDriveFileId(product.downloadUrl);
       const downloadUrl = fileId 
