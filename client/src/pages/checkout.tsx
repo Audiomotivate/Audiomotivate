@@ -1,37 +1,33 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
-import { CartItemWithProduct } from '@shared/schema';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { formatCurrency } from '../lib/utils';
-import { ShoppingBag, CreditCard, User, Mail, Shield, Star, AlertCircle } from 'lucide-react';
-import { Link } from 'wouter';
 
-// Production-safe Stripe initialization
-const getStripePromise = () => {
-  try {
-    const key = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-    if (!key) {
-      console.error('Missing VITE_STRIPE_PUBLIC_KEY');
-      return null;
-    }
-    return loadStripe(key);
-  } catch (error) {
-    console.error('Stripe initialization failed:', error);
-    return null;
-  }
-};
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
 
-const stripePromise = getStripePromise();
+interface Product {
+  id: number;
+  title: string;
+  price: number;
+  imageUrl: string;
+  type: string;
+  downloadUrl?: string;
+  previewUrl?: string;
+}
+
+interface CartItem {
+  id: number;
+  quantity: number;
+  product: Product;
+}
 
 interface CartResponse {
   cart: { id: number; sessionId: string; };
-  items: CartItemWithProduct[];
+  items: CartItem[];
 }
 
-function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItemWithProduct[] }) {
+const formatCurrency = (amount: number) => `$${amount.toFixed(2)} MXN`;
+
+function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem[] }) {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -127,155 +123,285 @@ function CheckoutForm({ total, cartItems }: { total: number; cartItems: CartItem
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <User className="h-5 w-5 text-blue-600" />
-            <span>Información Personal</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
-              <input 
-                type="text" 
-                required
-                value={customerInfo.firstName}
-                onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Tu nombre"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Apellido *</label>
-              <input 
-                type="text" 
-                required
-                value={customerInfo.lastName}
-                onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Tu apellido"
-              />
-            </div>
+    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ 
+          backgroundColor: 'white', 
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', 
+          borderRadius: '8px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            background: 'linear-gradient(to right, #2563eb, #9333ea)',
+            color: 'white',
+            padding: '24px'
+          }}>
+            <h3 style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '18px',
+              fontWeight: '600',
+              margin: '0'
+            }}>
+              <span>👤</span>
+              <span>Información Personal</span>
+            </h3>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Mail className="h-4 w-4 inline mr-1" />
-              Email *
-            </label>
-            <input 
-              type="email" 
-              required
-              value={customerInfo.email}
-              onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="tu@email.com"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Los enlaces de descarga se enviarán a este email
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <CreditCard className="h-5 w-5 text-blue-600" />
-            <span>Información de Pago</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="p-4 border border-gray-300 rounded-lg bg-white">
-            <PaymentElement 
-              options={{
-                layout: 'accordion',
-                paymentMethodOrder: ['card'],
-                fields: { billingDetails: 'never' },
-                terms: { card: 'never' },
-                wallets: { applePay: 'never', googlePay: 'never' }
-              }}
-            />
-          </div>
-          
-          {message && (
-            <div className={`p-4 rounded-lg text-sm font-medium ${
-              message.includes('✅') 
-                ? 'bg-green-100 text-green-800 border border-green-200' 
-                : 'bg-red-100 text-red-800 border border-red-200'
-            }`}>
-              {message}
-            </div>
-          )}
-
-          {processingStep && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <p className="text-blue-800 text-sm font-medium">{processingStep}</p>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                  Nombre *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  value={customerInfo.firstName}
+                  onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none'
+                  }}
+                  placeholder="Tu nombre"
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                  Apellido *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  value={customerInfo.lastName}
+                  onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    outline: 'none'
+                  }}
+                  placeholder="Tu apellido"
+                />
               </div>
             </div>
-          )}
-
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-lg border border-blue-200">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-2">Total a pagar</p>
-              <p className="text-3xl font-bold text-blue-600">{formatCurrency(total)}</p>
+            
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                <span style={{ marginRight: '4px' }}>📧</span>
+                Email *
+              </label>
+              <input 
+                type="email" 
+                required
+                value={customerInfo.email}
+                onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  outline: 'none'
+                }}
+                placeholder="tu@email.com"
+              />
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', margin: '4px 0 0 0' }}>
+                Los enlaces de descarga se enviarán a este email
+              </p>
             </div>
           </div>
-          
-          <Button
-            type="submit"
-            disabled={!stripe || isProcessing || !customerInfo.email}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 text-lg font-semibold rounded-lg"
-            size="lg"
-          >
-            {isProcessing ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                {processingStep || 'Procesando...'}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center">
-                <Shield className="h-5 w-5 mr-2" />
-                Completar Compra Segura
+        </div>
+
+        <div style={{ 
+          backgroundColor: 'white', 
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', 
+          borderRadius: '8px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            background: 'linear-gradient(to right, #2563eb, #9333ea)',
+            color: 'white',
+            padding: '24px'
+          }}>
+            <h3 style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '18px',
+              fontWeight: '600',
+              margin: '0'
+            }}>
+              <span>💳</span>
+              <span>Información de Pago</span>
+            </h3>
+          </div>
+          <div style={{ padding: '20px' }}>
+            <div style={{
+              padding: '16px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              marginBottom: '16px'
+            }}>
+              <PaymentElement 
+                options={{
+                  layout: 'accordion',
+                  paymentMethodOrder: ['card'],
+                  fields: { billingDetails: 'never' },
+                  terms: { card: 'never' },
+                  wallets: { applePay: 'never', googlePay: 'never' }
+                }}
+              />
+            </div>
+            
+            {message && (
+              <div style={{
+                padding: '16px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                marginBottom: '16px',
+                backgroundColor: message.includes('✅') ? '#dcfce7' : '#fee2e2',
+                color: message.includes('✅') ? '#166534' : '#991b1b',
+                border: message.includes('✅') ? '1px solid #bbf7d0' : '1px solid #fecaca'
+              }}>
+                {message}
               </div>
             )}
-          </Button>
-        </CardContent>
-      </Card>
-    </form>
+
+            {processingStep && (
+              <div style={{
+                padding: '16px',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid #2563eb',
+                    borderTop: '2px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }}></div>
+                  <p style={{ color: '#1e40af', fontSize: '14px', fontWeight: '500', margin: '0' }}>
+                    {processingStep}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div style={{
+              background: 'linear-gradient(to right, #eff6ff, #f3e8ff)',
+              padding: '24px',
+              borderRadius: '8px',
+              border: '1px solid #bfdbfe',
+              marginBottom: '16px'
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', margin: '0 0 8px 0' }}>
+                  Total a pagar
+                </p>
+                <p style={{ fontSize: '30px', fontWeight: 'bold', color: '#2563eb', margin: '0' }}>
+                  {formatCurrency(total)}
+                </p>
+              </div>
+            </div>
+            
+            <button
+              type="submit"
+              disabled={!stripe || isProcessing || !customerInfo.email}
+              style={{
+                width: '100%',
+                background: isProcessing ? '#6b7280' : 'linear-gradient(to right, #2563eb, #9333ea)',
+                color: 'white',
+                padding: '16px',
+                fontSize: '18px',
+                fontWeight: '600',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: isProcessing ? 'not-allowed' : 'pointer',
+                opacity: (!stripe || isProcessing || !customerInfo.email) ? 0.5 : 1
+              }}
+            >
+              {isProcessing ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    border: '2px solid white',
+                    borderTop: '2px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                    marginRight: '8px'
+                  }}></div>
+                  {processingStep || 'Procesando...'}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ marginRight: '8px' }}>🔒</span>
+                  Completar Compra Segura
+                </div>
+              )}
+            </button>
+          </div>
+        </div>
+      </form>
+      
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
   );
 }
 
 function SimpleHeader() {
   return (
-    <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
-          <Link href="/">
-            <div className="text-2xl font-bold">
-              <span className="text-yellow-500">Audio</span>
-              <span className="text-blue-600">Motívate</span>
-            </div>
-          </Link>
-        </div>
+    <header style={{
+      backgroundColor: 'white',
+      boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      right: '0',
+      zIndex: 50
+    }}>
+      <div style={{
+        maxWidth: '1280px',
+        margin: '0 auto',
+        padding: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        <a href="/" style={{ textDecoration: 'none' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+            <span style={{ color: '#eab308' }}>Audio</span>
+            <span style={{ color: '#2563eb' }}>Motívate</span>
+          </div>
+        </a>
       </div>
     </header>
   );
 }
 
 export default function Checkout() {
-  const { data: cartData, isLoading: cartLoading, error: cartError } = useQuery<CartResponse>({
-    queryKey: ['/api/cart'],
-  });
-
-  const { data: testimonials } = useQuery({
-    queryKey: ['/api/testimonials'],
-  });
+  const [cartData, setCartData] = useState<CartResponse | null>(null);
+  const [cartLoading, setCartLoading] = useState(true);
+  const [cartError, setCartError] = useState<string | null>(null);
+  
+  const [testimonials, setTestimonials] = useState<any[]>([]);
 
   const [clientSecret, setClientSecret] = useState('');
   const [loading, setLoading] = useState(false);
@@ -283,6 +409,33 @@ export default function Checkout() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    
+    // Load cart data
+    fetch('/api/cart')
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to load cart');
+        return response.json();
+      })
+      .then((data: CartResponse) => {
+        setCartData(data);
+        setCartLoading(false);
+      })
+      .catch(error => {
+        setCartError(error.message);
+        setCartLoading(false);
+      });
+
+    // Load testimonials
+    fetch('/api/testimonials')
+      .then(response => response.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setTestimonials(data);
+        }
+      })
+      .catch(error => {
+        console.warn('Failed to load testimonials:', error);
+      });
   }, []);
 
   const cartItems = cartData?.items || [];
@@ -337,13 +490,30 @@ export default function Checkout() {
     return (
       <>
         <SimpleHeader />
-        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-600 mb-4">Error de configuración de pagos</p>
-            <Button onClick={() => window.location.reload()}>
+        <main style={{
+          minHeight: '100vh',
+          background: 'linear-gradient(to bottom right, #f9fafb, #eff6ff)',
+          paddingTop: '96px',
+          paddingBottom: '48px'
+        }}>
+          <div style={{ maxWidth: '512px', margin: '0 auto', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '48px' }}>⚠️</span>
+            <p style={{ color: '#dc2626', marginBottom: '16px', marginTop: '16px' }}>
+              Error de configuración de pagos
+            </p>
+            <button 
+              onClick={() => window.location.reload()} 
+              style={{
+                backgroundColor: '#2563eb',
+                color: 'white',
+                padding: '8px 24px',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
               Recargar página
-            </Button>
+            </button>
           </div>
         </main>
       </>
@@ -354,10 +524,23 @@ export default function Checkout() {
     return (
       <>
         <SimpleHeader />
-        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Cargando carrito...</p>
+        <main style={{
+          minHeight: '100vh',
+          background: 'linear-gradient(to bottom right, #f9fafb, #eff6ff)',
+          paddingTop: '96px',
+          paddingBottom: '48px'
+        }}>
+          <div style={{ maxWidth: '512px', margin: '0 auto', padding: '16px', textAlign: 'center' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              border: '2px solid #2563eb',
+              borderTop: '2px solid transparent',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto'
+            }}></div>
+            <p style={{ marginTop: '16px', color: '#6b7280' }}>Cargando carrito...</p>
           </div>
         </main>
       </>
@@ -368,13 +551,30 @@ export default function Checkout() {
     return (
       <>
         <SimpleHeader />
-        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-600 mb-4">Error cargando el carrito</p>
-            <Button onClick={() => window.location.reload()}>
+        <main style={{
+          minHeight: '100vh',
+          background: 'linear-gradient(to bottom right, #f9fafb, #eff6ff)',
+          paddingTop: '96px',
+          paddingBottom: '48px'
+        }}>
+          <div style={{ maxWidth: '512px', margin: '0 auto', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '48px' }}>⚠️</span>
+            <p style={{ color: '#dc2626', marginBottom: '16px', marginTop: '16px' }}>
+              Error cargando el carrito
+            </p>
+            <button 
+              onClick={() => window.location.reload()} 
+              style={{
+                backgroundColor: '#2563eb',
+                color: 'white',
+                padding: '8px 24px',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
               Recargar página
-            </Button>
+            </button>
           </div>
         </main>
       </>
@@ -385,18 +585,34 @@ export default function Checkout() {
     return (
       <>
         <SimpleHeader />
-        <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <ShoppingBag className="h-20 w-20 mx-auto text-gray-400 mb-6" />
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">Tu carrito está vacío</h1>
-            <p className="text-gray-600 mb-8 text-lg">
+        <main style={{
+          minHeight: '100vh',
+          background: 'linear-gradient(to bottom right, #f9fafb, #eff6ff)',
+          paddingTop: '96px',
+          paddingBottom: '48px'
+        }}>
+          <div style={{ maxWidth: '512px', margin: '0 auto', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '80px' }}>🛍️</span>
+            <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827', marginBottom: '16px', marginTop: '16px' }}>
+              Tu carrito está vacío
+            </h1>
+            <p style={{ color: '#6b7280', marginBottom: '32px', fontSize: '18px' }}>
               Añade algunos productos antes de proceder al checkout.
             </p>
-            <Link href="/">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg">
-                Continuar Comprando
-              </Button>
-            </Link>
+            <a 
+              href="/" 
+              style={{
+                backgroundColor: '#2563eb',
+                color: 'white',
+                padding: '12px 32px',
+                fontSize: '18px',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                display: 'inline-block'
+              }}
+            >
+              Continuar Comprando
+            </a>
           </div>
         </main>
       </>
@@ -406,115 +622,207 @@ export default function Checkout() {
   return (
     <>
       <SimpleHeader />
-      <main className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-24 pb-12">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-4">
-            <div className="flex items-center justify-center mb-3">
-              <Star className="h-5 w-5 text-yellow-500 mr-2" />
-              <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+      <main style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(to bottom right, #f9fafb, #eff6ff)',
+        paddingTop: '96px',
+        paddingBottom: '48px'
+      }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '16px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+              <span style={{ color: '#eab308', marginRight: '8px' }}>⭐</span>
+              <h1 style={{
+                fontSize: '24px',
+                fontWeight: 'bold',
+                background: 'linear-gradient(to right, #2563eb, #9333ea)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                margin: '0'
+              }}>
                 La Inversión en tí es sin duda, la Mejor Inversión.
               </h1>
-              <Star className="h-5 w-5 text-yellow-500 ml-2" />
+              <span style={{ color: '#eab308', marginLeft: '8px' }}>⭐</span>
             </div>
-            <p className="text-base text-gray-700 max-w-2xl mx-auto">
+            <p style={{ fontSize: '16px', color: '#374151', maxWidth: '512px', margin: '0 auto' }}>
               Completa tu compra y recibe instantáneamente el contenido que te ayudará a alcanzar tus metas
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <Card className="shadow-lg border-0">
-                <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-lg">
-                  <CardTitle className="flex items-center space-x-2">
-                    <ShoppingBag className="h-5 w-5" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '32px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{
+                backgroundColor: 'white',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                borderRadius: '8px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  background: 'linear-gradient(to right, #2563eb, #9333ea)',
+                  color: 'white',
+                  padding: '24px'
+                }}>
+                  <h3 style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    margin: '0'
+                  }}>
+                    <span>🛍️</span>
                     <span>Resumen del Pedido</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-5 space-y-3">
+                  </h3>
+                </div>
+                <div style={{ padding: '20px' }}>
                   {cartItems.map((item) => (
-                    <div key={item.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div key={item.id} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px',
+                      backgroundColor: '#f9fafb',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      marginBottom: '12px'
+                    }}>
                       <img 
                         src={item.product.imageUrl} 
                         alt={item.product.title}
-                        className="w-16 h-20 object-contain bg-gray-50 rounded-lg shadow-md"
+                        style={{
+                          width: '64px',
+                          height: '80px',
+                          objectFit: 'contain',
+                          backgroundColor: '#f9fafb',
+                          borderRadius: '8px',
+                          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+                        }}
                       />
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-1 text-sm">{item.product.title}</h3>
-                        <p className="text-xs text-gray-600 capitalize mb-1">
+                      <div style={{ flex: '1' }}>
+                        <h3 style={{ fontWeight: '600', color: '#111827', marginBottom: '4px', fontSize: '14px', margin: '0 0 4px 0' }}>
+                          {item.product.title}
+                        </h3>
+                        <p style={{ fontSize: '12px', color: '#6b7280', textTransform: 'capitalize', marginBottom: '4px', margin: '0 0 4px 0' }}>
                           {item.product.type === 'audiobook' ? 'Audiolibro' : 
                            item.product.type === 'audio' ? 'Audio' : 
                            item.product.type === 'guide' ? 'Guía' : 'Script'}
                         </p>
-                        <p className="text-xs text-blue-600 font-medium">
+                        <p style={{ fontSize: '12px', color: '#2563eb', fontWeight: '500', margin: '0' }}>
                           Cantidad: {item.quantity}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-base text-gray-900">
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontWeight: 'bold', fontSize: '16px', color: '#111827', margin: '0' }}>
                           {formatCurrency(item.product.price * item.quantity)}
                         </p>
                       </div>
                     </div>
                   ))}
                   
-                  <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-200 mt-4">
-                    <div className="flex justify-between text-lg font-bold">
+                  <div style={{
+                    backgroundColor: '#eff6ff',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #bfdbfe',
+                    marginTop: '16px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 'bold' }}>
                       <span>Total:</span>
-                      <span className="text-blue-600">{formatCurrency(total)}</span>
+                      <span style={{ color: '#2563eb' }}>{formatCurrency(total)}</span>
                     </div>
-                    <p className="text-xs text-gray-500 text-center mt-2">
+                    <p style={{ fontSize: '12px', color: '#6b7280', textAlign: 'center', marginTop: '8px', margin: '8px 0 0 0' }}>
                       * Precios en pesos mexicanos (MXN)
                     </p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              {testimonials && Array.isArray(testimonials) && testimonials.length > 0 && (
-                <Card className="shadow-lg border-0">
-                  <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-t-lg">
-                    <CardTitle className="flex items-center space-x-2">
-                      <Star className="h-5 w-5" />
+              {testimonials && testimonials.length > 0 && (
+                <div style={{
+                  backgroundColor: 'white',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    background: 'linear-gradient(to right, #059669, #2563eb)',
+                    color: 'white',
+                    padding: '24px'
+                  }}>
+                    <h3 style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      margin: '0'
+                    }}>
+                      <span>⭐</span>
                       <span>Lo que dicen nuestros clientes</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-5">
-                    <div className="space-y-4">
-                      {testimonials.slice(0, 3).map((testimonial, index) => (
-                        <div key={testimonial.id || index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex items-start space-x-3">
-                            <div className="flex-1">
-                              <p className="text-sm text-gray-700 mb-2">"{testimonial.content}"</p>
-                              <p className="text-xs font-medium text-blue-600">
-                                - {testimonial.name}
-                              </p>
-                            </div>
-                            <div className="flex text-yellow-400">
-                              {[...Array(5)].map((_, i) => (
-                                <Star key={i} className="h-3 w-3 fill-current" />
-                              ))}
-                            </div>
+                    </h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    {testimonials.slice(0, 3).map((testimonial, index) => (
+                      <div key={testimonial.id || index} style={{
+                        padding: '16px',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '8px',
+                        border: '1px solid #e5e7eb',
+                        marginBottom: '16px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                          <div style={{ flex: '1' }}>
+                            <p style={{ fontSize: '14px', color: '#374151', marginBottom: '8px', margin: '0 0 8px 0' }}>
+                              "{testimonial.content}"
+                            </p>
+                            <p style={{ fontSize: '12px', fontWeight: '500', color: '#2563eb', margin: '0' }}>
+                              - {testimonial.name}
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', color: '#eab308' }}>
+                            {[...Array(5)].map((_, i) => (
+                              <span key={i}>⭐</span>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
             <div>
               {error ? (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                  <p className="text-red-600 mb-4">{error}</p>
-                  <Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <div style={{ textAlign: 'center', padding: '32px' }}>
+                  <span style={{ fontSize: '48px' }}>⚠️</span>
+                  <p style={{ color: '#dc2626', marginBottom: '16px', marginTop: '16px' }}>{error}</p>
+                  <button 
+                    onClick={() => window.location.reload()} 
+                    style={{
+                      backgroundColor: '#2563eb',
+                      color: 'white',
+                      padding: '8px 24px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
                     Reintentar
-                  </Button>
+                  </button>
                 </div>
               ) : loading || !clientSecret ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-4 text-gray-600">Preparando el pago...</p>
+                <div style={{ textAlign: 'center', padding: '32px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    border: '2px solid #2563eb',
+                    borderTop: '2px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                    margin: '0 auto'
+                  }}></div>
+                  <p style={{ marginTop: '16px', color: '#6b7280' }}>Preparando el pago...</p>
                 </div>
               ) : (
                 <Elements 
