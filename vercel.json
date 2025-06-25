@@ -2,120 +2,46 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/products/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/products/[id].js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/cart.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/cart/items.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/testimonials.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/checkout.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/admin/products.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/admin/analytics.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/admin/login.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/admin/logout.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/admin/auth.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "admin/index.html",
+      "src": "client/**/*",
       "use": "@vercel/static"
     },
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist/public"
-      }
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/products/([^/]+)",
-      "dest": "/api/products/[id].js?id=$1"
-    },
-    {
-      "src": "/api/products",
-      "dest": "/api/products/index.js"
-    },
-    {
-      "src": "/api/cart/items",
-      "dest": "/api/cart/items.js"
-    },
-    {
-      "src": "/api/cart",
-      "dest": "/api/cart.js"
-    },
-    {
-      "src": "/api/testimonials",
-      "dest": "/api/testimonials.js"
-    },
-    {
-      "src": "/api/checkout",
-      "dest": "/api/checkout.js"
-    },
-    {
-      "src": "/api/admin/products",
-      "dest": "/api/admin/products.js"
-    },
-    {
-      "src": "/api/admin/analytics",
-      "dest": "/api/admin/analytics.js"
-    },
-    {
-      "src": "/api/admin/login",
-      "dest": "/api/admin/login.js"
-    },
-    {
-      "src": "/api/admin/logout",
-      "dest": "/api/admin/logout.js"
-    },
-    {
-      "src": "/api/admin/auth",
-      "dest": "/api/admin/auth.js"
-    },
-    {
-      "src": "/admin$",
-      "dest": "/admin/index.html"
-    },
-    {
-      "src": "/admin/",
-      "dest": "/admin/index.html"
-    },
-    {
-      "handle": "filesystem"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/client/$1"
     }
-  ]
+  ],
+  "functions": {
+    "api/checkout.js": {
+      "maxDuration": 30
+    },
+    "api/send-download-email.js": {
+      "maxDuration": 30
+    },
+    "api/cart.js": {
+      "maxDuration": 15
+    },
+    "api/products.js": {
+      "maxDuration": 15
+    },
+    "api/products/[id].js": {
+      "maxDuration": 15
+    }
+  },
+  "env": {
+    "DATABASE_URL": "@database-url",
+    "STRIPE_SECRET_KEY": "@stripe-secret-key",
+    "VITE_STRIPE_PUBLIC_KEY": "@vite-stripe-public-key",
+    "EMAIL_USER": "@email-user",
+    "EMAIL_PASS": "@email-pass"
+  }
 }
