@@ -1,4 +1,4 @@
-// @vercel/node - API CONSOLIDADA
+// @vercel/node - API CONSOLIDADA PARA RESOLVER ERROR 500
 const { Pool, neonConfig } = require('@neondatabase/serverless');
 neonConfig.webSocketConstructor = require('ws');
 
@@ -8,6 +8,15 @@ const pool = new Pool({
 
 function getSessionId(req) {
   return req.headers['x-session-id'] || 'anonymous';
+}
+
+function convertGoogleDriveUrl(url) {
+  if (!url) return url;
+  const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (fileIdMatch) {
+    return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
+  }
+  return url;
 }
 
 module.exports = async (req, res) => {
@@ -27,23 +36,62 @@ module.exports = async (req, res) => {
     if (pathname === '/api/products') {
       if (req.method === 'GET') {
         const result = await pool.query(`
-          SELECT id, title, price, image_url as "imageUrl", preview_url as "previewUrl", 
-                 download_url as "downloadUrl", type, category, duration, rating, badge
+          SELECT id, title, price, image_url, preview_url, download_url, type, category, duration, rating, badge
           FROM products WHERE is_active = true ORDER BY created_at DESC
         `);
-        return res.status(200).json(result.rows);
+        
+        const products = result.rows.map(product => ({
+          ...product,
+          imageUrl: convertGoogleDriveUrl(product.image_url),
+          previewUrl: product.preview_url,
+          downloadUrl: product.download_url
+        }));
+        
+        return res.status(200).json(products);
       }
     }
 
-    // ADMIN PRODUCTS API (GET, POST, PUT, DELETE)
+    // SINGLE PRODUCT API
+    if (pathname.startsWith('/api/products/')) {
+      const productId = pathname.split('/')[3];
+      if (req.method === 'GET' && productId) {
+        const result = await pool.query(`
+          SELECT id, title, price, image_url, preview_url, download_url, type, category, duration, rating, badge
+          FROM products WHERE id = $1 AND is_active = true
+        `, [productId]);
+        
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        const product = {
+          ...result.rows[0],
+          imageUrl: convertGoogleDriveUrl(result.rows[0].image_url),
+          previewUrl: result.rows[0].preview_url,
+          downloadUrl: result.rows[0].download_url
+        };
+        
+        return res.status(200).json(product);
+      }
+    }
+
+    // ADMIN PRODUCTS API
     if (pathname === '/api/admin/products') {
       if (req.method === 'GET') {
         const result = await pool.query(`
-          SELECT id, title, price, image_url as "imageUrl", preview_url as "previewUrl", 
-                 download_url as "downloadUrl", type, category, duration, rating, badge, is_active as "isActive"
+          SELECT id, title, price, image_url, preview_url, download_url, type, category, duration, rating, badge, is_active
           FROM products ORDER BY created_at DESC
         `);
-        return res.status(200).json(result.rows);
+        
+        const products = result.rows.map(product => ({
+          ...product,
+          imageUrl: convertGoogleDriveUrl(product.image_url),
+          previewUrl: product.preview_url,
+          downloadUrl: product.download_url,
+          isActive: product.is_active
+        }));
+        
+        return res.status(200).json(products);
       }
       
       if (req.method === 'POST') {
@@ -52,6 +100,7 @@ module.exports = async (req, res) => {
           INSERT INTO products (title, price, image_url, preview_url, download_url, type, category, duration, rating, badge, is_active, created_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) RETURNING *
         `, [title, price, imageUrl, previewUrl, downloadUrl, type, category, duration, rating, badge, isActive]);
+        
         return res.status(201).json(result.rows[0]);
       }
       
@@ -63,6 +112,7 @@ module.exports = async (req, res) => {
                              type=$6, category=$7, duration=$8, rating=$9, badge=$10, is_active=$11
           WHERE id=$12 RETURNING *
         `, [title, price, imageUrl, previewUrl, downloadUrl, type, category, duration, rating, badge, isActive, productId]);
+        
         return res.status(200).json(result.rows[0]);
       }
       
@@ -109,7 +159,7 @@ module.exports = async (req, res) => {
             id: row['product.id'],
             title: row['product.title'],
             price: row['product.price'],
-            imageUrl: row['product.imageUrl']
+            imageUrl: convertGoogleDriveUrl(row['product.imageUrl'])
           }
         }));
         
@@ -203,6 +253,6 @@ module.exports = async (req, res) => {
 
   } catch (error) {
     console.error('API Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 };
