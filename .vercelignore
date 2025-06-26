@@ -1,5 +1,6 @@
 # Exclude everything except essential files
 server/
+admin/
 scripts/
 migrations/
 *.md
