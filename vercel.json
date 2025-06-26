@@ -19,6 +19,10 @@
       "dest": "/server/index.ts"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/dist/public/assets/$1"
+    },
+    {
       "src": "/admin(.*)",
       "dest": "/dist/public/index.html"
     },
