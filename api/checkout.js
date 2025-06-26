@@ -1,86 +1,61 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-neonConfig.webSocketConstructor = require('ws');
+const { Pool } = require('@neondatabase/serverless');
 
-const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Z9w3h6xGOa6n@ep-steep-dream-a58a9ykl.us-east-2.aws.neon.tech/neondb?sslmode=require'
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tXwAjwCGlj9v@ep-weathered-moon-a5lhb4r0.us-east-2.aws.neon.tech/neondb?sslmode=require'
 });
 
-let Stripe;
-
-async function getStripe() {
-  if (!Stripe) {
-    Stripe = (await import('stripe')).default;
-  }
-  return new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_51QWz6wA8xDzAzVVZxOtM7jFHfYKtCJHN5j8vVHQpOHKOQqKNhEZRvVSPEgKTOuXY6cDfPBqmJSpvOUZLbIgQ6RiP00P4ZgXP1z', {
-    apiVersion: '2023-10-16'
-  });
-}
-
-function getSessionId(req) {
-  return req.headers['x-session-id'] || 'anonymous';
-}
-
-module.exports = async function handler(req, res) {
-  res.setHeader('Content-Type', 'application/json');
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-session-id');
-
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method === 'POST') {
-    const sessionId = getSessionId(req);
-    
-    try {
-      // Get cart items
-      const cartResult = await pool.query(`
-        SELECT ci.quantity, ci.product_id,
-               p.title, p.price, p.download_url
-        FROM cart_items ci
-        JOIN products p ON ci.product_id = p.id
-        WHERE ci.session_id = $1
-      `, [sessionId]);
+  try {
+    if (req.method === 'POST') {
+      const Stripe = await import('stripe');
+      const stripe = new Stripe.default(process.env.STRIPE_SECRET_KEY || 'sk_test_51QT7IbP8VwxWqZJFiMnzJUZKOZSGPkdT2ksOVo5JlXW1xzSdKvbODPAi2EwqOwxh6M91mFPEV1IYU5ZEfcn3xCaD00xLu3zCDp');
 
-      if (cartResult.rows.length === 0) {
-        return res.status(400).json({ error: 'Carrito vacío' });
+      const { items, customerInfo } = req.body;
+      
+      if (!items || items.length === 0) {
+        return res.status(400).json({ error: 'No items in cart' });
       }
 
-      // Calculate total
-      const total = cartResult.rows.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      
-      // Create Stripe payment intent
-      const stripe = await getStripe();
-      
+      const amount = items.reduce((total, item) => total + (item.price * item.quantity), 0);
+
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(total * 100), // Convert to centavos
+        amount: Math.round(amount * 100),
         currency: 'mxn',
+        setup_future_usage: null,
+        payment_method_options: {
+          card: {
+            setup_future_usage: null
+          }
+        },
         metadata: {
-          sessionId: sessionId,
-          products: JSON.stringify(cartResult.rows.map(item => ({
-            id: item.product_id,
+          customer_email: customerInfo?.email || '',
+          customer_name: customerInfo?.name || '',
+          items: JSON.stringify(items.map(item => ({
+            id: item.id,
             title: item.title,
             quantity: item.quantity,
             price: item.price
           })))
-        },
-        setup_future_usage: null // No save card option
+        }
       });
 
-      return res.status(200).json({
+      return res.json({
         clientSecret: paymentIntent.client_secret,
-        amount: total
-      });
-
-    } catch (error) {
-      console.error('Checkout API error:', error);
-      return res.status(500).json({ 
-        error: 'Payment intent creation failed',
-        message: error.message 
+        paymentIntentId: paymentIntent.id
       });
     }
+    
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('Checkout API Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-
-  return res.status(405).json({ error: 'Method not allowed' });
 };
