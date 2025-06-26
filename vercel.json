@@ -1,42 +1,29 @@
 {
-  "builds": [
-    {
-      "src": "api/products.js",
-      "use": "@vercel/node"
+  "functions": {
+    "api/products.js": {
+      "runtime": "nodejs18.x"
     },
-    {
-      "src": "api/admin/products.js",
-      "use": "@vercel/node"
+    "api/admin/products.js": {
+      "runtime": "nodejs18.x"
     },
-    {
-      "src": "api/testimonials.js",
-      "use": "@vercel/node"
+    "api/testimonials.js": {
+      "runtime": "nodejs18.x"
     },
-    {
-      "src": "api/cart.js",
-      "use": "@vercel/node"
+    "api/cart.js": {
+      "runtime": "nodejs18.x"
     },
-    {
-      "src": "api/cart-items.js",
-      "use": "@vercel/node"
+    "api/cart-items.js": {
+      "runtime": "nodejs18.x"
     },
-    {
-      "src": "api/checkout.js",
-      "use": "@vercel/node"
+    "api/checkout.js": {
+      "runtime": "nodejs18.x"
     },
-    {
-      "src": "api/send-download-email.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "client/**",
-      "use": "@vercel/static-build",
-      "config": {
-        "buildCommand": "npm run build",
-        "outputDirectory": "dist/public"
-      }
+    "api/send-download-email.js": {
+      "runtime": "nodejs18.x"
     }
-  ],
+  },
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/public",
   "routes": [
     {
       "src": "/api/products/([^/]+)",
