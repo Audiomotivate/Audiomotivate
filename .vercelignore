@@ -1,6 +1,4 @@
 server/
-scripts/
-migrations/
 *.md
 *.txt
 *.tar.gz
@@ -19,3 +17,13 @@ all-missing-folders/
 app-fix/
 node_modules/
 .git/
+.cache/
+client-src-*
+app-without-aliases.tsx
+postcss.config.js
+vite.config.*.ts
+drizzle.config.ts
+components.json
+create-backup.sh
+force-push.sh
+generated-icon.png
