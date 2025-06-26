@@ -4,7 +4,6 @@ client/src/components/admin-dashboard.tsx
 client/src/components/admin-product-manager.tsx
 client/src/components/admin-settings.tsx
 client/src/components/admin-testimonials.tsx
-client/src/hooks/use-analytics.ts
 scripts/
 migrations/
 *.md
