@@ -1,69 +1,66 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-neonConfig.webSocketConstructor = require('ws');
+const { Pool } = require('@neondatabase/serverless');
 
-const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Z9w3h6xGOa6n@ep-steep-dream-a58a9ykl.us-east-2.aws.neon.tech/neondb?sslmode=require'
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tXwAjwCGlj9v@ep-weathered-moon-a5lhb4r0.us-east-2.aws.neon.tech/neondb?sslmode=require'
 });
 
-function getSessionId(req) {
-  return req.headers['x-session-id'] || 'anonymous';
+function convertGoogleDriveUrl(url) {
+  if (!url) return url;
+  const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (fileIdMatch) {
+    const fileId = fileIdMatch[1];
+    return `https://lh3.googleusercontent.com/d/${fileId}=w400-h600-c`;
+  }
+  return url;
 }
 
-module.exports = async function handler(req, res) {
-  res.setHeader('Content-Type', 'application/json');
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-session-id');
-
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const sessionId = getSessionId(req);
-
   try {
     if (req.method === 'GET') {
-      const result = await pool.query(`
-        SELECT ci.id, ci.quantity, ci.product_id,
-               p.title, p.price, p.image_url
-        FROM cart_items ci
-        JOIN products p ON ci.product_id = p.id
-        WHERE ci.session_id = $1
-      `, [sessionId]);
-
-      const items = result.rows.map(item => ({
-        id: item.id,
-        productId: item.product_id,
-        quantity: item.quantity,
+      const sessionId = req.headers['x-session-id'] || 'anonymous';
+      const client = await pool.connect();
+      
+      const cartResult = await client.query(
+        `SELECT c.id, ci.id as item_id, ci.product_id, ci.quantity, 
+                p.title, p.price, p.image_url, p.category
+         FROM carts c
+         JOIN cart_items ci ON c.id = ci.cart_id
+         JOIN products p ON ci.product_id = p.id
+         WHERE c.session_id = $1`,
+        [sessionId]
+      );
+      
+      client.release();
+      
+      const items = cartResult.rows.map(row => ({
+        id: row.item_id,
+        productId: row.product_id,
+        quantity: row.quantity,
         product: {
-          id: item.product_id,
-          title: item.title,
-          price: item.price,
-          imageUrl: item.image_url
+          id: row.product_id,
+          title: row.title,
+          price: row.price,
+          imageUrl: convertGoogleDriveUrl(row.image_url),
+          category: row.category
         }
       }));
-
+      
       const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-
-      return res.status(200).json({
-        items,
-        total,
-        count: items.length
-      });
+      
+      return res.json({ items, total });
     }
-
-    if (req.method === 'DELETE') {
-      await pool.query('DELETE FROM cart_items WHERE session_id = $1', [sessionId]);
-      return res.status(200).json({ success: true });
-    }
-
+    
     return res.status(405).json({ error: 'Method not allowed' });
-
   } catch (error) {
-    console.error('Cart API error:', error);
-    return res.status(500).json({ 
-      error: 'Database error',
-      message: error.message 
-    });
+    console.error('Cart API Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
