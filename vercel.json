@@ -1,36 +1,14 @@
 {
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
   "rewrites": [
     {
-      "source": "/api/products",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/api/products/(.*)",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/api/testimonials",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/api/cart",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/api/cart/items",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/api/admin/products",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/api/checkout",
-      "destination": "/api/payment"
-    },
-    {
-      "source": "/api/send-download-email",
-      "destination": "/api/payment"
+      "source": "/api/products/([^/]+)",
+      "destination": "/api/products?id=$1"
     },
     {
       "source": "/(.*)",
