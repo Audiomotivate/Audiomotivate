@@ -1,3 +1,4 @@
+# Exclude everything except essential files
 server/
 scripts/
 migrations/
@@ -5,6 +6,7 @@ migrations/
 *.txt
 *.tar.gz
 *.zip
+*.sh
 .replit
 attached_assets/
 audiomotivate-*/
@@ -18,3 +20,9 @@ all-missing-folders/
 app-fix/
 node_modules/
 .git/
+
+# Exclude any remaining TypeScript files that might be detected as functions
+*.ts
+!client/src/**/*.ts
+!client/src/**/*.tsx
+!shared/**/*.ts
