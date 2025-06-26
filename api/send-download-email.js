@@ -1,121 +1,111 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-neonConfig.webSocketConstructor = require('ws');
+const { Pool } = require('@neondatabase/serverless');
 
-const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Z9w3h6xGOa6n@ep-steep-dream-a58a9ykl.us-east-2.aws.neon.tech/neondb?sslmode=require'
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tXwAjwCGlj9v@ep-weathered-moon-a5lhb4r0.us-east-2.aws.neon.tech/neondb?sslmode=require'
 });
-
-function extractGoogleDriveFileId(url) {
-  if (!url) return null;
-  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : null;
-}
 
 function generateEmailHTML(customerName, downloadLinks) {
   return `
     <!DOCTYPE html>
     <html>
     <head>
-      <meta charset="utf-8">
-      <title>Tu compra en Audio Motívate</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
-        .header { text-align: center; margin-bottom: 30px; }
-        .logo { font-size: 32px; font-weight: bold; margin-bottom: 10px; }
-        .audio { color: #fbbf24; }
-        .motivate { color: #3b82f6; }
-        .product { background: #f8fafc; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #3b82f6; }
-        .download-btn { display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0; }
-        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
-      </style>
+        <meta charset="utf-8">
+        <title>Tu compra está lista - Audio Motívate</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #FFD700, #4169E1); color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; background: #f9f9f9; }
+            .download-link { display: inline-block; background: #4169E1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        </style>
     </head>
     <body>
-      <div class="container">
-        <div class="header">
-          <div class="logo">
-            <span class="audio">Audio</span><span class="motivate">Motívate</span>
-          </div>
-          <h2>¡Tu compra ha sido confirmada!</h2>
+        <div class="container">
+            <div class="header">
+                <h1>🎉 ¡Tu compra está lista!</h1>
+                <p>Gracias por confiar en Audio Motívate</p>
+            </div>
+            <div class="content">
+                <p>Hola ${customerName || 'Estimado/a cliente'},</p>
+                <p>¡Excelente noticia! Tu compra se ha procesado exitosamente y ya tienes acceso inmediato a tu contenido digital.</p>
+                <h3>📥 Tus descargas:</h3>
+                ${downloadLinks.map(link => `
+                    <p><a href="${link.url}" class="download-link">📱 Descargar: ${link.title}</a></p>
+                `).join('')}
+                <p><strong>⚡ Enlaces válidos por 7 días</strong></p>
+                <p>Guarda estos archivos en tu dispositivo para acceso permanente.</p>
+                <p>¡Disfruta tu contenido motivacional y transforma tu vida!</p>
+                <p>Con cariño,<br>El equipo de Audio Motívate</p>
+            </div>
+            <div class="footer">
+                <p>© 2025 Audio Motívate - Transformando vidas a través del audio</p>
+            </div>
         </div>
-        
-        <p>Hola ${customerName || 'Cliente'},</p>
-        
-        <p>Gracias por tu compra en Audio Motívate. Aquí tienes los enlaces de descarga para tus productos:</p>
-        
-        ${downloadLinks.map(link => `
-          <div class="product">
-            <h3>${link.title}</h3>
-            <p>Tipo: ${link.type}</p>
-            <a href="${link.url}" class="download-btn">Descargar Ahora</a>
-            <p><small>Este enlace expira en 7 días por motivos de seguridad.</small></p>
-          </div>
-        `).join('')}
-        
-        <div class="footer">
-          <p>¡Gracias por confiar en Audio Motívate!</p>
-          <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
-        </div>
-      </div>
     </body>
     </html>
   `;
 }
 
-module.exports = async function handler(req, res) {
-  res.setHeader('Content-Type', 'application/json');
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method === 'POST') {
-    try {
-      const { email, customerName, products } = req.body;
-
-      if (!email || !products || products.length === 0) {
-        return res.status(400).json({ error: 'Email y productos requeridos' });
+  try {
+    if (req.method === 'POST') {
+      const { customerEmail, customerName, items } = req.body;
+      
+      if (!customerEmail || !items || items.length === 0) {
+        return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // Get product details from database
-      const productIds = products.map(p => p.id);
-      const result = await pool.query(`
-        SELECT id, title, type, download_url 
-        FROM products 
-        WHERE id = ANY($1)
-      `, [productIds]);
-
-      const downloadLinks = result.rows.map(product => ({
-        title: product.title,
-        type: product.type,
-        url: product.download_url
-      }));
-
-      // Generate email HTML
-      const emailHTML = generateEmailHTML(customerName, downloadLinks);
-
-      // In a real implementation, you would send the email here
-      // For now, we'll simulate email sending
-      console.log('Email would be sent to:', email);
-      console.log('Download links:', downloadLinks);
-
-      return res.status(200).json({ 
-        success: true,
-        message: 'Email enviado exitosamente',
-        downloadLinks 
-      });
-
-    } catch (error) {
-      console.error('Send email API error:', error);
-      return res.status(500).json({ 
-        error: 'Error enviando email',
-        message: error.message 
-      });
+      const client = await pool.connect();
+      
+      try {
+        const downloadLinks = [];
+        
+        for (const item of items) {
+          const productResult = await client.query(
+            'SELECT title, download_url FROM products WHERE id = $1',
+            [item.id]
+          );
+          
+          if (productResult.rows.length > 0) {
+            const product = productResult.rows[0];
+            downloadLinks.push({
+              title: product.title,
+              url: product.download_url
+            });
+          }
+        }
+        
+        client.release();
+        
+        const emailHTML = generateEmailHTML(customerName, downloadLinks);
+        
+        // En un entorno real, aquí enviarías el email usando un servicio como SendGrid o similar
+        console.log('Email would be sent to:', customerEmail);
+        console.log('Download links:', downloadLinks);
+        
+        return res.json({ 
+          success: true, 
+          message: 'Email sent successfully',
+          downloadLinks: downloadLinks
+        });
+      } catch (error) {
+        client.release();
+        throw error;
+      }
     }
+    
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('Send Download Email API Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-
-  return res.status(405).json({ error: 'Method not allowed' });
 };
