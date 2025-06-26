@@ -17,7 +17,7 @@ function convertGoogleDriveUrl(url) {
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-ID');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -28,34 +28,80 @@ module.exports = async (req, res) => {
       const sessionId = req.headers['x-session-id'] || 'anonymous';
       const client = await pool.connect();
       
-      const cartResult = await client.query(
-        `SELECT c.id, ci.id as item_id, ci.product_id, ci.quantity, 
-                p.title, p.price, p.image_url, p.category
-         FROM carts c
-         JOIN cart_items ci ON c.id = ci.cart_id
-         JOIN products p ON ci.product_id = p.id
-         WHERE c.session_id = $1`,
-        [sessionId]
-      );
+      const cartResult = await client.query('SELECT id FROM carts WHERE session_id = $1', [sessionId]);
+      
+      if (cartResult.rows.length === 0) {
+        client.release();
+        return res.json({
+          cart: {
+            id: null,
+            sessionId: sessionId,
+            items: [],
+            total: 0
+          }
+        });
+      }
+      
+      const cartId = cartResult.rows[0].id;
+      
+      const itemsResult = await client.query(`
+        SELECT ci.id, ci.quantity, ci.product_id,
+               p.title, p.price, p.image_url
+        FROM cart_items ci
+        JOIN products p ON ci.product_id = p.id
+        WHERE ci.cart_id = $1
+      `, [cartId]);
       
       client.release();
       
-      const items = cartResult.rows.map(row => ({
-        id: row.item_id,
-        productId: row.product_id,
-        quantity: row.quantity,
+      const items = itemsResult.rows.map(item => ({
+        id: item.id,
+        productId: item.product_id,
+        quantity: item.quantity,
         product: {
-          id: row.product_id,
-          title: row.title,
-          price: row.price,
-          imageUrl: convertGoogleDriveUrl(row.image_url),
-          category: row.category
+          id: item.product_id,
+          title: item.title,
+          price: item.price,
+          imageUrl: convertGoogleDriveUrl(item.image_url)
         }
       }));
       
       const total = items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
       
-      return res.json({ items, total });
+      return res.json({
+        cart: {
+          id: cartId,
+          sessionId: sessionId,
+          items: items,
+          total: total
+        }
+      });
+    }
+    
+    if (req.method === 'DELETE') {
+      const sessionId = req.headers['x-session-id'] || 'anonymous';
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        const cartResult = await client.query('SELECT id FROM carts WHERE session_id = $1', [sessionId]);
+        
+        if (cartResult.rows.length > 0) {
+          const cartId = cartResult.rows[0].id;
+          await client.query('DELETE FROM cart_items WHERE cart_id = $1', [cartId]);
+          await client.query('DELETE FROM carts WHERE id = $1', [cartId]);
+        }
+        
+        await client.query('COMMIT');
+        client.release();
+        
+        return res.json({ success: true });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        client.release();
+        throw error;
+      }
     }
     
     return res.status(405).json({ error: 'Method not allowed' });
