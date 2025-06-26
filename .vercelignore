@@ -1,13 +1,17 @@
-# Exclude everything except essential files
 server/
-admin/
+client/src/components/admin-analytics.tsx
+client/src/components/admin-dashboard.tsx
+client/src/components/admin-product-manager.tsx
+client/src/components/admin-settings.tsx
+client/src/components/admin-testimonials.tsx
+client/src/hooks/use-analytics.ts
 scripts/
 migrations/
 *.md
 *.txt
 *.tar.gz
 *.zip
-*.sh
+API-*.js
 .replit
 attached_assets/
 audiomotivate-*/
@@ -21,9 +25,3 @@ all-missing-folders/
 app-fix/
 node_modules/
 .git/
-
-# Exclude any remaining TypeScript files that might be detected as functions
-*.ts
-!client/src/**/*.ts
-!client/src/**/*.tsx
-!shared/**/*.ts
