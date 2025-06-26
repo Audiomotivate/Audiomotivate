@@ -1,27 +1,34 @@
 {
-  "functions": {
-    "api/products.js": {
-      "runtime": "@vercel/node@3"
+  "builds": [
+    {
+      "src": "api/products.js",
+      "use": "@vercel/node"
     },
-    "api/admin/products.js": {
-      "runtime": "@vercel/node@3"
+    {
+      "src": "api/admin/products.js",
+      "use": "@vercel/node"
     },
-    "api/testimonials.js": {
-      "runtime": "@vercel/node@3"
+    {
+      "src": "api/testimonials.js",
+      "use": "@vercel/node"
     },
-    "api/cart.js": {
-      "runtime": "@vercel/node@3"
+    {
+      "src": "api/cart.js",
+      "use": "@vercel/node"
     },
-    "api/cart-items.js": {
-      "runtime": "@vercel/node@3"
+    {
+      "src": "api/cart-items.js",
+      "use": "@vercel/node"
     },
-    "api/checkout.js": {
-      "runtime": "@vercel/node@3"
+    {
+      "src": "api/checkout.js",
+      "use": "@vercel/node"
     },
-    "api/send-download-email.js": {
-      "runtime": "@vercel/node@3"
+    {
+      "src": "api/send-download-email.js",
+      "use": "@vercel/node"
     }
-  },
+  ],
   "rewrites": [
     {
       "source": "/api/products/([^/]+)",
