@@ -27,18 +27,26 @@
     {
       "src": "api/send-download-email.js",
       "use": "@vercel/node"
-    }
-  ],
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist/public",
-  "rewrites": [
-    {
-      "source": "/api/products/([^/]+)",
-      "destination": "/api/products?id=$1"
     },
     {
-      "source": "/(.*)",
-      "destination": "/$1"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/products/([^/]+)",
+      "dest": "/api/products?id=$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
