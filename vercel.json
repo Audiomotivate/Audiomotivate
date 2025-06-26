@@ -1,4 +1,27 @@
 {
+  "functions": {
+    "api/products.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/admin/products.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/testimonials.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/cart.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/cart-items.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/checkout.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/send-download-email.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
   "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
   "rewrites": [
