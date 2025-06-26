@@ -1,42 +1,4 @@
 {
-  "builds": [
-    {
-      "src": "api/products.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/admin/products.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/testimonials.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/cart.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/cart-items.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/checkout.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/send-download-email.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/products/([^/]+)",
-      "destination": "/api/products?id=$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/public"
 }
