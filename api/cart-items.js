@@ -1,95 +1,71 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-neonConfig.webSocketConstructor = require('ws');
+const { Pool } = require('@neondatabase/serverless');
 
-const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Z9w3h6xGOa6n@ep-steep-dream-a58a9ykl.us-east-2.aws.neon.tech/neondb?sslmode=require'
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tXwAjwCGlj9v@ep-weathered-moon-a5lhb4r0.us-east-2.aws.neon.tech/neondb?sslmode=require'
 });
 
-function getSessionId(req) {
-  return req.headers['x-session-id'] || 'anonymous';
-}
-
-module.exports = async function handler(req, res) {
-  res.setHeader('Content-Type', 'application/json');
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-session-id');
-
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const sessionId = getSessionId(req);
-
   try {
     if (req.method === 'POST') {
       const { productId, quantity = 1 } = req.body;
-
-      if (!productId) {
-        return res.status(400).json({ error: 'Product ID requerido' });
-      }
-
-      // Verificar si ya existe
-      const existingResult = await pool.query(
-        'SELECT id, quantity FROM cart_items WHERE session_id = $1 AND product_id = $2',
-        [sessionId, productId]
-      );
-
-      if (existingResult.rows.length > 0) {
-        // Actualizar cantidad
-        const newQuantity = existingResult.rows[0].quantity + quantity;
-        await pool.query(
-          'UPDATE cart_items SET quantity = $1 WHERE id = $2',
-          [newQuantity, existingResult.rows[0].id]
+      const sessionId = req.headers['x-session-id'] || 'anonymous';
+      
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+        
+        let cartResult = await client.query('SELECT id FROM carts WHERE session_id = $1', [sessionId]);
+        let cartId;
+        
+        if (cartResult.rows.length === 0) {
+          const newCartResult = await client.query(
+            'INSERT INTO carts (session_id) VALUES ($1) RETURNING id',
+            [sessionId]
+          );
+          cartId = newCartResult.rows[0].id;
+        } else {
+          cartId = cartResult.rows[0].id;
+        }
+        
+        const existingItem = await client.query(
+          'SELECT id, quantity FROM cart_items WHERE cart_id = $1 AND product_id = $2',
+          [cartId, productId]
         );
-      } else {
-        // Insertar nuevo
-        await pool.query(
-          'INSERT INTO cart_items (session_id, product_id, quantity) VALUES ($1, $2, $3)',
-          [sessionId, productId, quantity]
-        );
+        
+        if (existingItem.rows.length > 0) {
+          await client.query(
+            'UPDATE cart_items SET quantity = quantity + $1 WHERE id = $2',
+            [quantity, existingItem.rows[0].id]
+          );
+        } else {
+          await client.query(
+            'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)',
+            [cartId, productId, quantity]
+          );
+        }
+        
+        await client.query('COMMIT');
+        return res.json({ success: true });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-
-      return res.status(200).json({ success: true });
     }
-
-    if (req.method === 'PUT') {
-      const { itemId, quantity } = req.body;
-
-      if (!itemId || quantity === undefined) {
-        return res.status(400).json({ error: 'Item ID y cantidad requeridos' });
-      }
-
-      if (quantity <= 0) {
-        await pool.query('DELETE FROM cart_items WHERE id = $1 AND session_id = $2', [itemId, sessionId]);
-      } else {
-        await pool.query(
-          'UPDATE cart_items SET quantity = $1 WHERE id = $2 AND session_id = $3',
-          [quantity, itemId, sessionId]
-        );
-      }
-
-      return res.status(200).json({ success: true });
-    }
-
-    if (req.method === 'DELETE') {
-      const { itemId } = req.body;
-
-      if (!itemId) {
-        return res.status(400).json({ error: 'Item ID requerido' });
-      }
-
-      await pool.query('DELETE FROM cart_items WHERE id = $1 AND session_id = $2', [itemId, sessionId]);
-      return res.status(200).json({ success: true });
-    }
-
+    
     return res.status(405).json({ error: 'Method not allowed' });
-
   } catch (error) {
-    console.error('Cart items API error:', error);
-    return res.status(500).json({ 
-      error: 'Database error',
-      message: error.message 
-    });
+    console.error('Cart Items API Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
