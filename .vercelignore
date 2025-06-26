@@ -6,6 +6,11 @@ client/src/components/admin-settings.tsx
 client/src/components/admin-testimonials.tsx
 scripts/
 migrations/
+shared/
+drizzle.config.ts
+vite.config.ts
+tailwind.config.ts
+*.config.ts
 *.md
 *.txt
 *.tar.gz
