@@ -1,4 +1,49 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist/public"
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
+      }
+    },
+    {
+      "src": "api/products.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/admin/products.js", 
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/testimonials.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/cart.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/cart-items.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/checkout.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/send-download-email.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
 }
