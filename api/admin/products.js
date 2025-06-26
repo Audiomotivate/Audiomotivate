@@ -1,24 +1,39 @@
-const { Pool } = require('@neondatabase/serverless');
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+const ws = require('ws');
+
+neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tXwAjwCGlj9v@ep-weathered-moon-a5lhb4r0.us-east-2.aws.neon.tech/neondb?sslmode=require'
+  connectionString: process.env.DATABASE_URL,
 });
 
+// Convert Google Drive URLs to direct image URLs
 function convertGoogleDriveUrl(url) {
-  if (!url) return url;
-  const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (fileIdMatch) {
-    const fileId = fileIdMatch[1];
-    return `https://lh3.googleusercontent.com/d/${fileId}=w400-h600-c`;
+  if (!url) return null;
+  
+  if (url.includes('drive.google.com/file/d/')) {
+    const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) {
+      return `https://lh3.googleusercontent.com/d/${match[1]}`;
+    }
   }
+  
+  if (url.includes('drive.google.com/open?id=')) {
+    const match = url.match(/id=([a-zA-Z0-9_-]+)/);
+    if (match) {
+      return `https://lh3.googleusercontent.com/d/${match[1]}`;
+    }
+  }
+  
   return url;
 }
 
 module.exports = async (req, res) => {
+  // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -27,112 +42,123 @@ module.exports = async (req, res) => {
     const client = await pool.connect();
     
     if (req.method === 'GET') {
-      const result = await client.query('SELECT * FROM products ORDER BY id');
-      client.release();
+      // Get all products for admin
+      const result = await client.query(
+        'SELECT * FROM products ORDER BY id ASC'
+      );
       
       const products = result.rows.map(product => ({
         id: product.id,
         title: product.title,
-        description: product.description,
-        type: product.type,
-        price: product.price,
         category: product.category,
+        price: product.price,
+        duration: product.duration,
+        rating: product.rating,
         imageUrl: convertGoogleDriveUrl(product.image_url),
         previewUrl: product.preview_url,
         downloadUrl: product.download_url,
-        duration: product.duration,
         badge: product.badge,
-        isActive: product.is_active,
-        createdAt: product.created_at
+        isActive: product.is_active
       }));
       
-      return res.json(products);
+      client.release();
+      return res.status(200).json(products);
     }
     
     if (req.method === 'POST') {
-      const { id, title, description, type, price, category, imageUrl, previewUrl, downloadUrl, duration, badge, isActive } = req.body;
+      // Create new product
+      const { id, title, category, price, duration, rating, imageUrl, previewUrl, downloadUrl, badge, isActive } = req.body;
+      
+      const convertedImageUrl = convertGoogleDriveUrl(imageUrl);
       
       const result = await client.query(
-        `INSERT INTO products (id, title, description, type, price, category, image_url, preview_url, download_url, duration, badge, is_active) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
-         ON CONFLICT (id) DO UPDATE SET 
-         title = EXCLUDED.title, description = EXCLUDED.description, type = EXCLUDED.type,
-         price = EXCLUDED.price, category = EXCLUDED.category, image_url = EXCLUDED.image_url,
-         preview_url = EXCLUDED.preview_url, download_url = EXCLUDED.download_url,
-         duration = EXCLUDED.duration, badge = EXCLUDED.badge, is_active = EXCLUDED.is_active
+        `INSERT INTO products (id, title, category, price, duration, rating, image_url, preview_url, download_url, badge, is_active) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
          RETURNING *`,
-        [id || Date.now(), title, description, type, price, category, imageUrl, previewUrl, downloadUrl, duration, badge, isActive !== false]
+        [id, title, category, price, duration, rating || 4.9, convertedImageUrl, previewUrl, downloadUrl, badge, isActive !== false]
       );
-      client.release();
       
       const product = result.rows[0];
-      return res.json({
+      const transformedProduct = {
         id: product.id,
         title: product.title,
-        description: product.description,
-        type: product.type,
-        price: product.price,
         category: product.category,
+        price: product.price,
+        duration: product.duration,
+        rating: product.rating,
         imageUrl: convertGoogleDriveUrl(product.image_url),
         previewUrl: product.preview_url,
         downloadUrl: product.download_url,
-        duration: product.duration,
         badge: product.badge,
-        isActive: product.is_active,
-        createdAt: product.created_at
-      });
+        isActive: product.is_active
+      };
+      
+      client.release();
+      return res.status(201).json(transformedProduct);
     }
     
     if (req.method === 'PUT') {
+      // Update product
       const { id } = req.query;
-      const { title, description, type, price, category, imageUrl, previewUrl, downloadUrl, duration, badge, isActive } = req.body;
+      const { title, category, price, duration, rating, imageUrl, previewUrl, downloadUrl, badge, isActive } = req.body;
+      
+      const convertedImageUrl = convertGoogleDriveUrl(imageUrl);
       
       const result = await client.query(
-        `UPDATE products SET title = $1, description = $2, type = $3, price = $4, category = $5, 
-         image_url = $6, preview_url = $7, download_url = $8, duration = $9, badge = $10, is_active = $11
-         WHERE id = $12 RETURNING *`,
-        [title, description, type, price, category, imageUrl, previewUrl, downloadUrl, duration, badge, isActive, id]
+        `UPDATE products 
+         SET title = $2, category = $3, price = $4, duration = $5, rating = $6, 
+             image_url = $7, preview_url = $8, download_url = $9, badge = $10, is_active = $11
+         WHERE id = $1 
+         RETURNING *`,
+        [id, title, category, price, duration, rating, convertedImageUrl, previewUrl, downloadUrl, badge, isActive]
       );
-      client.release();
       
       if (result.rows.length === 0) {
+        client.release();
         return res.status(404).json({ error: 'Product not found' });
       }
       
       const product = result.rows[0];
-      return res.json({
+      const transformedProduct = {
         id: product.id,
         title: product.title,
-        description: product.description,
-        type: product.type,
-        price: product.price,
         category: product.category,
+        price: product.price,
+        duration: product.duration,
+        rating: product.rating,
         imageUrl: convertGoogleDriveUrl(product.image_url),
         previewUrl: product.preview_url,
         downloadUrl: product.download_url,
-        duration: product.duration,
         badge: product.badge,
-        isActive: product.is_active,
-        createdAt: product.created_at
-      });
+        isActive: product.is_active
+      };
+      
+      client.release();
+      return res.status(200).json(transformedProduct);
     }
     
     if (req.method === 'DELETE') {
+      // Delete product
       const { id } = req.query;
       
-      const result = await client.query('DELETE FROM products WHERE id = $1 RETURNING *', [id]);
-      client.release();
+      const result = await client.query(
+        'DELETE FROM products WHERE id = $1 RETURNING *',
+        [id]
+      );
       
       if (result.rows.length === 0) {
+        client.release();
         return res.status(404).json({ error: 'Product not found' });
       }
       
-      return res.json({ success: true });
+      client.release();
+      return res.status(200).json({ message: 'Product deleted successfully' });
     }
     
-    return res.status(405).json({ error: 'Method not allowed' });
+    client.release();
+    res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
-    console.error('Admin Products API Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Database error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
