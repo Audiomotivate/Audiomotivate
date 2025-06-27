@@ -1,5 +1,6 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-neonConfig.webSocketConstructor = require('ws');
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
+neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL
@@ -16,7 +17,7 @@ function convertGoogleDriveUrl(url) {
   return url;
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -109,4 +110,4 @@ module.exports = async (req, res) => {
     console.error('Admin Products API Error:', error);
     return res.status(500).json({ error: 'Database error', details: error.message });
   }
-};
+}
