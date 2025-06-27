@@ -1,5 +1,6 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-neonConfig.webSocketConstructor = require('ws');
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
+neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL
@@ -9,7 +10,7 @@ function getSessionId(req) {
   return req.headers['x-session-id'] || 'anonymous';
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-session-id');
@@ -43,7 +44,7 @@ module.exports = async (req, res) => {
       const total = cartResult.rows.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       
       // Import Stripe dynamically
-      const Stripe = require('stripe');
+      const { default: Stripe } = await import('stripe');
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       
       // Create payment intent
@@ -73,4 +74,4 @@ module.exports = async (req, res) => {
     console.error('Checkout API Error:', error);
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
-};
+}
