@@ -1,92 +1,79 @@
-module.exports = async (req, res) => {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+neonConfig.webSocketConstructor = require('ws');
 
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL
+});
+
+function convertGoogleDriveUrl(url) {
+  if (!url) return url;
+  
+  if (url.includes('drive.google.com/file/d/')) {
+    const fileId = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)[1];
+    return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  }
+  
+  return url;
+}
+
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
-    const { email, products, paymentIntentId } = req.body;
-    
-    if (!email || !products || !Array.isArray(products) || products.length === 0) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (req.method === 'POST') {
+      const { paymentIntentId, email } = req.body;
+      
+      if (!paymentIntentId || !email) {
+        return res.status(400).json({ error: 'Payment intent ID and email are required' });
+      }
+      
+      // Get payment intent metadata from Stripe
+      const Stripe = require('stripe');
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+      
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      
+      if (!paymentIntent.metadata || !paymentIntent.metadata.products) {
+        return res.status(400).json({ error: 'No products found in payment' });
+      }
+      
+      const products = JSON.parse(paymentIntent.metadata.products);
+      
+      // Get full product details with download URLs
+      const productIds = products.map(p => p.id);
+      const result = await pool.query(`
+        SELECT id, title, "downloadUrl"
+        FROM products 
+        WHERE id = ANY($1)
+      `, [productIds]);
+      
+      const downloadLinks = result.rows.map(product => ({
+        title: product.title,
+        downloadUrl: convertGoogleDriveUrl(product.downloadUrl),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      }));
+      
+      // In a real implementation, you would send an email here
+      // For now, we'll just return the download links
+      
+      return res.status(200).json({
+        message: 'Download links prepared successfully',
+        email,
+        downloadLinks,
+        note: 'Los enlaces de descarga expiran en 7 días'
+      });
     }
-    
-    // Log the email sending attempt (in production, you would integrate with an email service)
-    console.log('Email confirmation sent to:', email);
-    console.log('Products:', products);
-    console.log('Payment Intent ID:', paymentIntentId);
-    
-    // For now, we'll simulate successful email sending
-    // In production, integrate with services like SendGrid, Mailgun, or AWS SES
-    
-    // Simulate email content
-    const emailContent = {
-      to: email,
-      subject: 'Confirmación de compra - Audio Motívate',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #3B82F6;">¡Gracias por tu compra!</h1>
-          <p>Tu pedido ha sido procesado exitosamente. Aquí están tus enlaces de descarga:</p>
-          
-          <div style="background: #F3F4F6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h2>Productos adquiridos:</h2>
-            ${products.map(product => `
-              <div style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 5px;">
-                <h3 style="margin: 0 0 10px 0; color: #1F2937;">${product.title}</h3>
-                <p style="margin: 5px 0; color: #6B7280;">Cantidad: ${product.quantity}</p>
-                <p style="margin: 5px 0; color: #6B7280;">Precio: $${product.price} MXN</p>
-                ${product.downloadUrl ? `
-                  <a href="${product.downloadUrl}" 
-                     style="display: inline-block; background: #3B82F6; color: white; padding: 10px 20px; 
-                            text-decoration: none; border-radius: 5px; margin-top: 10px;">
-                    Descargar ahora
-                  </a>
-                ` : '<p style="color: #EF4444;">URL de descarga no disponible</p>'}
-              </div>
-            `).join('')}
-          </div>
-          
-          <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
-            <strong>Importante:</strong> Los enlaces de descarga estarán disponibles por 7 días. 
-            Guarda este email para futuras referencias.
-          </p>
-          
-          <p style="color: #6B7280; font-size: 14px;">
-            ID de transacción: ${paymentIntentId}
-          </p>
-          
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-          
-          <p style="text-align: center; color: #6B7280; font-size: 14px;">
-            Audio Motívate - Tu plataforma de contenido motivacional
-          </p>
-        </div>
-      `
-    };
-    
-    // Log the email content for debugging
-    console.log('Email would be sent with content:', emailContent.subject);
-    
-    return res.status(200).json({ 
-      message: 'Email sent successfully',
-      emailSent: true,
-      recipient: email,
-      productsCount: products.length
-    });
+
+    return res.status(405).json({ error: 'Method not allowed' });
     
   } catch (error) {
-    console.error('Email sending error:', error);
-    return res.status(500).json({ 
-      error: 'Failed to send email',
-      details: error.message 
-    });
+    console.error('Send Download Email API Error:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 };
