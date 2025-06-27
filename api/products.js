@@ -1,4 +1,4 @@
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -75,4 +75,4 @@ module.exports = async (req, res) => {
     console.error('Products API Error:', error);
     return res.status(500).json({ error: 'Server error' });
   }
-};
+}
