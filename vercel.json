@@ -9,8 +9,6 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "installCommand": "npm install",
-        "buildCommand": "npx vite build",
         "outputDirectory": "dist/public"
       }
     }
