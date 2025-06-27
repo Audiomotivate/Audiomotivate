@@ -2,9 +2,7 @@ const { Pool, neonConfig } = require('@neondatabase/serverless');
 neonConfig.webSocketConstructor = require('ws');
 
 const pool = new Pool({ 
-  const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL
-});
 });
 
 function getSessionId(req) {
