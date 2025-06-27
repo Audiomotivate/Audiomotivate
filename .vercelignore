@@ -27,5 +27,6 @@ pages-only/
 vercel-essential/
 all-missing-folders/
 app-fix/
+admin/
 node_modules/
 .git/
