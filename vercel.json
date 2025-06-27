@@ -1,7 +1,13 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist/public",
   "builds": [
+    { 
+      "src": "package.json", 
+      "use": "@vercel/static-build",
+      "config": { 
+        "buildCommand": "npm run build",
+        "outputDirectory": "dist/public"
+      }
+    },
     { "src": "api/products.js", "use": "@vercel/node" },
     { "src": "api/admin/products.js", "use": "@vercel/node" },
     { "src": "api/testimonials.js", "use": "@vercel/node" },
