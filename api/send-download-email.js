@@ -1,5 +1,6 @@
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-neonConfig.webSocketConstructor = require('ws');
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
+neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL
@@ -16,7 +17,7 @@ function convertGoogleDriveUrl(url) {
   return url;
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -34,7 +35,7 @@ module.exports = async (req, res) => {
       }
       
       // Get payment intent metadata from Stripe
-      const Stripe = require('stripe');
+      const { default: Stripe } = await import('stripe');
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       
       const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -76,4 +77,4 @@ module.exports = async (req, res) => {
     console.error('Send Download Email API Error:', error);
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
-};
+}
