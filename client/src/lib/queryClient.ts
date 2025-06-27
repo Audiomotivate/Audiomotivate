@@ -34,7 +34,7 @@ export const getQueryFn: <T>(options: {
     if (typeof window !== 'undefined') {
       sessionId = localStorage.getItem('cart-session-id');
       if (!sessionId) {
-        sessionId = 'browser-session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        sessionId = 'browser-session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
         localStorage.setItem('cart-session-id', sessionId);
       }
     }
