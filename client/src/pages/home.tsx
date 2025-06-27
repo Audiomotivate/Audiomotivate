@@ -49,6 +49,11 @@ export default function Home() {
   // Fetch all products and filter by type
   const { data: allProducts = [] } = useQuery({
     queryKey: ['/api/products'],
+    queryFn: async () => {
+      const response = await fetch('/api/products');
+      if (!response.ok) throw new Error('Failed to fetch products');
+      return response.json();
+    },
     staleTime: 0, // Force refresh
   });
 
