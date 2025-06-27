@@ -1,3 +1,4 @@
+import React, { useEffect, lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -6,18 +7,15 @@ import NotFound from "./pages/not-found";
 import AllAudiobooks from "./pages/all-audiobooks";
 import AllAudios from "./pages/all-audios";
 import Checkout from "./pages/checkout";
-
-import { useEffect, lazy, Suspense } from "react";
 import LocationPopup from "./components/location-popup";
 import CartDrawer from "./components/cart-drawer";
 import { CartProvider } from "./providers/cart-provider";
-import { useAnalytics } from "./hooks/use-analytics";
 
 // Importamos los componentes de páginas dinámicamente
 const CartPage = lazy(() => import('./pages/cart-page'));
 const AllScripts = lazy(() => import('./pages/all-scripts'));
 const AllGuides = lazy(() => import('./pages/all-guides'));
-const AdminPanel = lazy(() => import('./pages/admin'));
+const AdminPanel = lazy(() => import('./pages/admin-simple'));
 import OrderSuccess from './pages/order-success';
 const ProductDetail = lazy(() => import('./pages/product-detail'));
 const TermsOfService = lazy(() => import('./pages/terms-of-service'));
@@ -26,9 +24,6 @@ const RefundPolicy = lazy(() => import('./pages/refund-policy'));
 const CookiePolicy = lazy(() => import('./pages/cookie-policy'));
 
 function Router() {
-  // Track analytics for all page views
-  useAnalytics();
-  
   return (
     <Switch>
       <Route path="/" component={Home} />
