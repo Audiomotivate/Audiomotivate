@@ -9,6 +9,11 @@ import { Button } from './ui/button';
 function AudiobooksSection() {
   const { data: allProducts = [], isLoading, error } = useQuery<Product[]>({
     queryKey: ['/api/products'],
+    queryFn: async () => {
+      const response = await fetch('/api/products');
+      if (!response.ok) throw new Error('Failed to fetch products');
+      return response.json();
+    },
     staleTime: 0,
   });
 
