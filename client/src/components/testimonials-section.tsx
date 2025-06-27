@@ -6,6 +6,11 @@ import { Star, StarHalf } from 'lucide-react';
 function TestimonialsSection() {
   const { data: testimonials, isLoading } = useQuery<Testimonial[]>({
     queryKey: ['/api/testimonials'],
+    queryFn: async () => {
+      const response = await fetch('/api/testimonials');
+      if (!response.ok) throw new Error('Failed to fetch testimonials');
+      return response.json();
+    },
   });
 
   const renderStars = (rating: number) => {
