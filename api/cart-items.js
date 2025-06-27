@@ -1,71 +1,90 @@
-const { Pool } = require('@neondatabase/serverless');
+const { Pool, neonConfig } = require('@neondatabase/serverless');
+neonConfig.webSocketConstructor = require('ws');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_tXwAjwCGlj9v@ep-weathered-moon-a5lhb4r0.us-east-2.aws.neon.tech/neondb?sslmode=require'
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL
 });
+
+function getSessionId(req) {
+  return req.headers['x-session-id'] || 'anonymous';
+}
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-session-id');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  const sessionId = getSessionId(req);
+
   try {
     if (req.method === 'POST') {
-      const { productId, quantity = 1 } = req.body;
-      const sessionId = req.headers['x-session-id'] || 'anonymous';
+      // Add item to cart
+      const { productId } = req.body;
       
-      const client = await pool.connect();
+      // Get or create cart
+      let cartResult = await pool.query('SELECT id FROM carts WHERE session_id = $1', [sessionId]);
+      let cartId;
       
-      try {
-        await client.query('BEGIN');
-        
-        let cartResult = await client.query('SELECT id FROM carts WHERE session_id = $1', [sessionId]);
-        let cartId;
-        
-        if (cartResult.rows.length === 0) {
-          const newCartResult = await client.query(
-            'INSERT INTO carts (session_id) VALUES ($1) RETURNING id',
-            [sessionId]
-          );
-          cartId = newCartResult.rows[0].id;
-        } else {
-          cartId = cartResult.rows[0].id;
-        }
-        
-        const existingItem = await client.query(
-          'SELECT id, quantity FROM cart_items WHERE cart_id = $1 AND product_id = $2',
+      if (cartResult.rows.length === 0) {
+        const newCart = await pool.query('INSERT INTO carts (session_id) VALUES ($1) RETURNING id', [sessionId]);
+        cartId = newCart.rows[0].id;
+      } else {
+        cartId = cartResult.rows[0].id;
+      }
+      
+      // Check if item already exists
+      const existingItem = await pool.query(
+        'SELECT id, quantity FROM cart_items WHERE cart_id = $1 AND product_id = $2',
+        [cartId, productId]
+      );
+      
+      if (existingItem.rows.length > 0) {
+        // Update quantity
+        await pool.query(
+          'UPDATE cart_items SET quantity = quantity + 1 WHERE id = $1',
+          [existingItem.rows[0].id]
+        );
+      } else {
+        // Add new item
+        await pool.query(
+          'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, 1)',
           [cartId, productId]
         );
-        
-        if (existingItem.rows.length > 0) {
-          await client.query(
-            'UPDATE cart_items SET quantity = quantity + $1 WHERE id = $2',
-            [quantity, existingItem.rows[0].id]
-          );
-        } else {
-          await client.query(
-            'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)',
-            [cartId, productId, quantity]
-          );
-        }
-        
-        await client.query('COMMIT');
-        return res.json({ success: true });
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
       }
+      
+      return res.status(200).json({ message: 'Item added to cart' });
     }
-    
+
+    if (req.method === 'PUT') {
+      // Update item quantity
+      const { id, quantity } = req.body;
+      
+      if (quantity <= 0) {
+        await pool.query('DELETE FROM cart_items WHERE id = $1', [id]);
+      } else {
+        await pool.query('UPDATE cart_items SET quantity = $2 WHERE id = $1', [id, quantity]);
+      }
+      
+      return res.status(200).json({ message: 'Item updated' });
+    }
+
+    if (req.method === 'DELETE') {
+      // Remove item from cart
+      const { id } = req.body;
+      
+      await pool.query('DELETE FROM cart_items WHERE id = $1', [id]);
+      
+      return res.status(200).json({ message: 'Item removed from cart' });
+    }
+
     return res.status(405).json({ error: 'Method not allowed' });
+    
   } catch (error) {
     console.error('Cart Items API Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Database error', details: error.message });
   }
 };
