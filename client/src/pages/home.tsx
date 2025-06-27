@@ -16,7 +16,6 @@ import Footer from "../components/footer";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Link } from "wouter";
-import { formatCurrency } from "../lib/utils";
 import { Star } from "lucide-react";
 
 interface Product {
@@ -172,11 +171,8 @@ export default function Home() {
                             <span className="text-xs md:text-sm text-gray-400 ml-1">4.8</span>
                           </div>
 
-                          {/* Precio y duración */}
-                          <div className="flex items-center justify-between">
-                            <span className="text-pink-600 font-bold text-sm md:text-base">
-                              {formatCurrency(product.price)}
-                            </span>
+                          {/* Duración solamente - SIN PRECIO */}
+                          <div className="flex items-center justify-center">
                             {product.duration && (
                               <div className="flex items-center text-gray-500 text-xs md:text-sm">
                                 ⏱ {product.duration}
