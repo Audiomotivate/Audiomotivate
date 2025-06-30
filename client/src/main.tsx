@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App-simple";
-import "./index.css";
+// Temporarily commented out CSS to test if it's blocking render
+// import "./index.css";
 
 // Ensure DOM is ready before mounting React
 if (document.readyState === 'loading') {
