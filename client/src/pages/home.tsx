@@ -171,8 +171,8 @@ export default function Home() {
                             <span className="text-xs md:text-sm text-gray-400 ml-1">4.8</span>
                           </div>
 
-                          {/* Duración solamente - SIN PRECIO */}
-                          <div className="flex items-center justify-center">
+                          {/* Duración solamente - sin precios en diseño final */}
+                          <div className="flex items-center justify-between">
                             {product.duration && (
                               <div className="flex items-center text-gray-500 text-xs md:text-sm">
                                 ⏱ {product.duration}
