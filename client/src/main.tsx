@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App-minimal";
+import App from "./App-router-test";
 import "./index.css";
 
 // Ensure DOM is ready before mounting React
